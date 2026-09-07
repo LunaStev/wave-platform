@@ -35,6 +35,7 @@ func (repository *Repository) Post(slug string, includeDrafts bool) (Post, error
 		return Post{}, storage.ErrNotFound
 	}
 	item.Category = NormalizeCategory(item.Category)
+	item.Language = item.ContentLanguage()
 	item.CommentPolicy = NormalizeCommentPolicy(item.Category, item.CommentPolicy)
 	if item.Category == "roadmap" {
 		item.Summary = SummaryFromContent(item.Content)

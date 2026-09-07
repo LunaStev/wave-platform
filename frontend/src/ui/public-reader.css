@@ -1,0 +1,17 @@
+/* The initial server-rendered document uses the same platform tokens as Vue. */
+.public-reader { width: min(100% - 40px, 780px); margin: 32px auto 64px; color: var(--wave-text); font-size: 17px; line-height: 1.8; overflow-wrap: anywhere; }
+.public-reader nav { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-bottom: 24px; font-size: 14px; }
+.public-reader a { color: var(--wave-link); text-underline-offset: 3px; }
+.public-reader a:focus-visible { outline: 2px solid var(--wave-focus); outline-offset: 4px; }
+.public-reader header { margin-bottom: 32px; padding-bottom: 24px; border-bottom: 1px solid var(--wave-border); }
+.public-reader h1 { font-size: clamp(30px, 4vw, 48px); line-height: 1.2; margin: 0 0 20px; }
+.public-reader header p, .public-reader time { color: var(--wave-text-secondary); }
+.public-reader .markdown-content { color: inherit; font: inherit; }
+.public-reader pre { max-width: 100%; overflow-x: auto; padding: 18px; background: var(--wave-code-bg); border: 1px solid var(--wave-code-border); color: var(--wave-code-text); }
+.public-reader pre code { font: 14px/1.65 var(--wave-font-code); white-space: pre; }
+.public-reader img { max-width: 100%; height: auto; }
+.public-reader table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
+.public-reader th, .public-reader td { padding: 8px 12px; border: 1px solid var(--wave-border); }
+.public-reader-index { padding-left: 24px; }
+.public-reader-index li { margin: 10px 0; }
+@media (max-width: 768px) { .public-reader { margin-top: 24px; font-size: 16px; line-height: 1.75; } }

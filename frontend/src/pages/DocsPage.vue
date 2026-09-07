@@ -95,11 +95,24 @@ function changeDocumentLocale(event: Event) {
     : { name: 'docs-locale', params: { docLocale: value } })
 }
 watchEffect(() => {
-  if (!document.value) return
+  if (!document.value) {
+    applyPageSEO({
+      title: failed.value ? 'Page not found · Wave' : 'Documentation · Wave',
+      description: failed.value ? 'The requested document could not be loaded.' : 'Official Wave programming language guides and reference documentation.',
+      locale: docLocale.value, path: route.path, noIndex: failed.value,
+      schema: { '@type': 'CollectionPage' },
+      alternates: !currentPath.value ? [...documentLocales.map((item) => ({ locale: item.id, path: `/docs/${item.id}` })), { locale: 'x-default', path: '/docs/en' }] : [],
+    })
+    return
+  }
   applyPageSEO({
     title: `${document.value.title} · Wave Documentation`,
     description: document.value.summary,
     locale: document.value.locale,
+    alternates: [
+      ...document.value.translations.map((item) => ({ locale: item.locale, path: `/docs/${item.locale}/${item.path}` })),
+      ...(document.value.translations.some((item) => item.locale === 'en') ? [{ locale: 'x-default', path: `/docs/en/${currentPath.value}` }] : []),
+    ],
     path: showingEnglishFallback.value ? `/docs/en/${currentPath.value}` : route.path,
     breadcrumbs: [
       { name: 'Home', path: '/' },
@@ -123,7 +136,7 @@ watchEffect(() => {
   <main class="docs-service">
     <header class="docs-service-header">
       <div class="docs-width docs-service-header-inner">
-        <div><h1>{{ t('docs.title') }}</h1></div>
+        <div><RouterLink class="docs-service-title" :to="docBase">{{ t('docs.title') }}</RouterLink></div>
         <label class="docs-locale-select">
           <span>{{ t('docs.languageSelector') }}</span>
           <select :value="docLocale" @change="changeDocumentLocale">

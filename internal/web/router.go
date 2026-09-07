@@ -77,6 +77,7 @@ func NewRouter(
 	editorHandler := handler.EditorHandler{Engine: editorEngine, Auth: authHandler}
 	usersHandler := handler.UsersHandler{Community: communityRepository, Questions: questionRepository, Auth: authHandler}
 	seoHandler := NewSEOHandler(publicURL, documentRepository, blogService, communityRepository, questionRepository, rfcService)
+	seoHandler.source = sourceService
 
 	mux.HandleFunc("GET /api/v1/platform", platformHandler.Status)
 	mux.HandleFunc("GET /api/v1/modules", modulesHandler.Status)
@@ -198,7 +199,14 @@ func NewRouter(
 
 	mux.Handle("/", frontendHandler(frontendPath, seoHandler))
 
-	return mux
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		// Public API responses remain fetchable for rendering, while their XML
+		// endpoints are not competing search results for the corresponding pages.
+		if strings.HasPrefix(request.URL.Path, "/api/") {
+			writer.Header().Set("X-Robots-Tag", "noindex")
+		}
+		mux.ServeHTTP(writer, request)
+	})
 }
 
 func frontendHandler(root string, seo SEOHandler) http.Handler {
@@ -209,17 +217,36 @@ func frontendHandler(root string, seo SEOHandler) http.Handler {
 	const seoEnd = "<!-- wave:seo:end -->"
 	renderIndex := func(writer http.ResponseWriter, request *http.Request) {
 		document := indexDocument
-		document = bytes.Replace(document, []byte(`<html lang="en">`), []byte(`<html lang="`+languageForPath(request.URL.Path)+`">`), 1)
+		metadata := seo.metadata(request.URL.Path, seo.baseURL(request))
+		status := seo.StatusCode(request)
+		if status == http.StatusNotFound {
+			metadata = notFoundMetadata(metadata)
+		}
+		if status >= 500 {
+			metadata = notFoundMetadata(metadata)
+			metadata.Title = "Temporarily unavailable · Wave"
+			metadata.Description = "Please try again shortly."
+			writer.Header().Set("Retry-After", "60")
+		}
+		document = bytes.Replace(document, []byte(`<html lang="en">`), []byte(`<html lang="`+metadata.Language+`">`), 1)
 		start := bytes.Index(document, []byte(seoStart))
 		end := bytes.Index(document, []byte(seoEnd))
 		if start >= 0 && end > start {
 			end += len(seoEnd)
-			replacement := []byte(seoStart + "\n    " + seo.HTMLMetadata(request) + "\n    " + seoEnd)
+			replacement := []byte(seoStart + "\n    " + seo.htmlMetadata(metadata, seo.baseURL(request)) + "\n    " + seoEnd)
 			document = append(append(append([]byte{}, document[:start]...), replacement...), document[end:]...)
 		}
+		document = bytes.Replace(document, []byte(`<div id="app"></div>`), []byte(`<div id="app">`+seo.htmlContent(metadata)+`</div>`), 1)
+		if status == http.StatusOK {
+			document = bytes.Replace(document, []byte(`</body>`), []byte(seo.pageData(request.URL.Path)+`</body>`), 1)
+		}
+		if strings.HasPrefix(metadata.Robots, "noindex") {
+			writer.Header().Set("X-Robots-Tag", metadata.Robots)
+		}
 		writer.Header().Set("Content-Type", "text/html; charset=utf-8")
+		writer.Header().Set("Content-Language", metadata.Language)
 		writer.Header().Set("Cache-Control", "no-cache")
-		writer.WriteHeader(seo.StatusCode(request))
+		writer.WriteHeader(status)
 		_, _ = writer.Write(document)
 	}
 
@@ -228,6 +255,9 @@ func frontendHandler(root string, seo SEOHandler) http.Handler {
 		request *http.Request,
 	) {
 		if redirect := seo.CanonicalRedirect(request.URL.Path); redirect != "" {
+			if request.URL.RawQuery != "" {
+				redirect += "?" + request.URL.RawQuery
+			}
 			http.Redirect(writer, request, redirect, http.StatusPermanentRedirect)
 			return
 		}
@@ -245,7 +275,7 @@ func frontendHandler(root string, seo SEOHandler) http.Handler {
 		)
 
 		if info, err := os.Stat(requestedPath); err == nil && !info.IsDir() {
-			if strings.HasPrefix(request.URL.Path, "/fonts/") {
+			if strings.HasPrefix(request.URL.Path, "/fonts/") || strings.HasPrefix(request.URL.Path, "/assets/") {
 				writer.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 			}
 			fileServer.ServeHTTP(writer, request)

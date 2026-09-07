@@ -16,13 +16,21 @@ import (
 	blogdomain "github.com/wavefnd/wave-platform/internal/blog"
 	communitydomain "github.com/wavefnd/wave-platform/internal/community"
 	documentdomain "github.com/wavefnd/wave-platform/internal/document"
+	"github.com/wavefnd/wave-platform/internal/gitmirror"
 	questiondomain "github.com/wavefnd/wave-platform/internal/question"
 	rfcdomain "github.com/wavefnd/wave-platform/internal/rfc"
 )
 
 type sitemapURL struct {
-	Location     string `xml:"loc"`
-	LastModified string `xml:"lastmod,omitempty"`
+	Location     string         `xml:"loc"`
+	LastModified string         `xml:"lastmod,omitempty"`
+	Alternates   []seoAlternate `xml:"http://www.w3.org/1999/xhtml link,omitempty"`
+}
+
+type seoAlternate struct {
+	Rel      string `xml:"rel,attr"`
+	Language string `xml:"hreflang,attr"`
+	URL      string `xml:"href,attr"`
 }
 
 type sitemapURLSet struct {
@@ -38,6 +46,7 @@ type SEOHandler struct {
 	community *communitydomain.Repository
 	questions *questiondomain.Repository
 	rfcs      *rfcdomain.Service
+	source    *gitmirror.Service
 }
 
 type pageMetadata struct {
@@ -60,6 +69,8 @@ type pageMetadata struct {
 	Comments       []seoComment
 	CommentCount   int
 	Language       string
+	Markdown       string
+	Alternates     []seoAlternate
 }
 
 type seoBreadcrumb struct {
@@ -99,7 +110,7 @@ func (handler SEOHandler) Robots(writer http.ResponseWriter, request *http.Reque
 	base := handler.baseURL(request)
 	writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	writer.Header().Set("Cache-Control", "public, max-age=3600")
-	_, _ = writer.Write([]byte("User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /account\nDisallow: /login\nDisallow: /register\nDisallow: /mail\nDisallow: /blog/editor\nDisallow: /api/\n\nSitemap: " + base + "/sitemap.xml\n"))
+	_, _ = writer.Write([]byte("User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /account\nDisallow: /login\nDisallow: /register\nDisallow: /mail\nDisallow: /blog/editor\nDisallow: /api/\nAllow: /api/v1/documents\nAllow: /api/v1/blog/posts\nAllow: /api/v1/releases\nAllow: /api/v1/community/\nAllow: /api/v1/questions\nAllow: /api/v1/rfcs\nAllow: /api/v1/source/repositories\n\nSitemap: " + base + "/sitemap.xml\n"))
 }
 
 func (handler SEOHandler) Sitemap(writer http.ResponseWriter, request *http.Request) {
@@ -118,9 +129,20 @@ func (handler SEOHandler) Sitemap(writer http.ResponseWriter, request *http.Requ
 	}
 
 	if handler.documents != nil {
-		if documents, err := handler.documents.Summaries("en"); err == nil {
+		for _, locale := range documentationLocales {
+			documents, err := handler.documents.Summaries(locale)
+			if err != nil {
+				http.Error(writer, "sitemap temporarily unavailable", http.StatusServiceUnavailable)
+				return
+			}
+			entries = append(entries, sitemapURL{Location: handler.location(base, "docs", locale)})
 			for _, document := range documents {
-				entries = append(entries, sitemapURL{Location: handler.location(base, "docs", "en", document.Path)})
+				view, err := handler.documents.Published(locale, document.Path)
+				if err != nil {
+					http.Error(writer, "sitemap temporarily unavailable", http.StatusServiceUnavailable)
+					return
+				}
+				entries = append(entries, sitemapURL{Location: handler.location(base, "docs", locale, document.Path), LastModified: view.UpdatedAt, Alternates: handler.documentAlternates(base, document.Path)})
 			}
 		}
 	}
@@ -137,6 +159,9 @@ func (handler SEOHandler) Sitemap(writer http.ResponseWriter, request *http.Requ
 				}
 				entries = append(entries, sitemapURL{Location: handler.location(base, section, post.Slug), LastModified: lastModified})
 			}
+		} else {
+			http.Error(writer, "sitemap temporarily unavailable", http.StatusServiceUnavailable)
+			return
 		}
 	}
 	if handler.community != nil {
@@ -152,6 +177,9 @@ func (handler SEOHandler) Sitemap(writer http.ResponseWriter, request *http.Requ
 				}
 				entries = append(entries, sitemapURL{Location: handler.location(base, pathSegments...), LastModified: dateOnly(thread.LastActivityAt)})
 			}
+		} else {
+			http.Error(writer, "sitemap temporarily unavailable", http.StatusServiceUnavailable)
+			return
 		}
 	}
 	if handler.questions != nil {
@@ -159,6 +187,9 @@ func (handler SEOHandler) Sitemap(writer http.ResponseWriter, request *http.Requ
 			for _, question := range questions {
 				entries = append(entries, sitemapURL{Location: handler.location(base, "questions", question.ID), LastModified: dateOnly(question.LastActivityAt)})
 			}
+		} else {
+			http.Error(writer, "sitemap temporarily unavailable", http.StatusServiceUnavailable)
+			return
 		}
 	}
 	if handler.rfcs != nil {
@@ -166,9 +197,52 @@ func (handler SEOHandler) Sitemap(writer http.ResponseWriter, request *http.Requ
 			for _, proposal := range proposals {
 				entries = append(entries, sitemapURL{Location: handler.location(base, "rfcs", strconv.FormatUint(proposal.Number, 10)), LastModified: dateOnly(proposal.UpdatedAt.Format(time.RFC3339))})
 			}
+		} else {
+			http.Error(writer, "sitemap temporarily unavailable", http.StatusServiceUnavailable)
+			return
 		}
 	}
 
+	writeSitemap(writer, request, base, entries)
+}
+
+const sitemapPageSize = 10000
+
+func writeSitemap(writer http.ResponseWriter, request *http.Request, base string, entries []sitemapURL) {
+	pageValue := request.URL.Query().Get("page")
+	if pageValue == "" && len(entries) > sitemapPageSize {
+		type indexEntry struct {
+			Location string `xml:"loc"`
+		}
+		index := struct {
+			XMLName xml.Name     `xml:"sitemapindex"`
+			XMLNS   string       `xml:"xmlns,attr"`
+			Items   []indexEntry `xml:"sitemap"`
+		}{XMLNS: "http://www.sitemaps.org/schemas/sitemap/0.9"}
+		for page := 1; page <= (len(entries)+sitemapPageSize-1)/sitemapPageSize; page++ {
+			index.Items = append(index.Items, indexEntry{Location: base + "/sitemap.xml?page=" + strconv.Itoa(page)})
+		}
+		data, err := xml.MarshalIndent(index, "", "  ")
+		if err != nil {
+			http.Error(writer, "cannot create sitemap", 500)
+			return
+		}
+		writer.Header().Set("Content-Type", "application/xml; charset=utf-8")
+		writer.Header().Set("Cache-Control", "public, max-age=900")
+		_, _ = writer.Write(append([]byte(xml.Header), data...))
+		return
+	}
+	if pageValue != "" {
+		page, err := strconv.Atoi(pageValue)
+		pages := (len(entries) + sitemapPageSize - 1) / sitemapPageSize
+		if err != nil || page < 1 || page > pages {
+			http.NotFound(writer, request)
+			return
+		}
+		start := (page - 1) * sitemapPageSize
+		end := min(start+sitemapPageSize, len(entries))
+		entries = entries[start:end]
+	}
 	data, err := xml.MarshalIndent(sitemapURLSet{
 		XMLNS: "http://www.sitemaps.org/schemas/sitemap/0.9",
 		URLs:  entries,
@@ -184,7 +258,11 @@ func (handler SEOHandler) Sitemap(writer http.ResponseWriter, request *http.Requ
 
 func (handler SEOHandler) HTMLMetadata(request *http.Request) string {
 	metadata := handler.metadata(request.URL.Path, handler.baseURL(request))
-	base := strings.TrimRight(handler.baseURL(request), "/")
+	return handler.htmlMetadata(metadata, handler.baseURL(request))
+}
+
+func (handler SEOHandler) htmlMetadata(metadata pageMetadata, publicURL string) string {
+	base := strings.TrimRight(publicURL, "/")
 	organizationID := base + "/#organization"
 	websiteID := base + "/#website"
 	pageID := metadata.Canonical + "#webpage"
@@ -289,7 +367,7 @@ func (handler SEOHandler) HTMLMetadata(request *http.Request) string {
     <meta property="og:type" content="` + escape(metadata.OpenGraph) + `" />
     <meta property="og:url" content="` + escape(metadata.Canonical) + `" />
     <meta property="og:site_name" content="Wave" />
-    <meta property="og:locale" content="en_US" />
+    <meta property="og:locale" content="` + escape(openGraphLocale(metadata.Language)) + `" />
     <meta name="twitter:card" content="` + map[bool]string{true: "summary_large_image", false: "summary"}[metadata.Image != ""] + `" />
     <meta name="twitter:title" content="` + escape(metadata.Title) + `" />
     <meta name="twitter:description" content="` + escape(metadata.Description) + `" />
@@ -318,6 +396,9 @@ func (handler SEOHandler) HTMLMetadata(request *http.Request) string {
 `
 	}
 	schemaMarkup := ""
+	for _, alternate := range metadata.Alternates {
+		result += `    <link rel="alternate" hreflang="` + escape(alternate.Language) + `" href="` + escape(alternate.URL) + `" data-wave-alternate="true" />` + "\n"
+	}
 	if !strings.HasPrefix(metadata.Robots, "noindex") {
 		schemaMarkup = `    <script type="application/ld+json" data-wave-schema="true">` + string(schema) + `</script>
 `
@@ -327,6 +408,9 @@ func (handler SEOHandler) HTMLMetadata(request *http.Request) string {
 }
 
 func (handler SEOHandler) StatusCode(request *http.Request) int {
+	if status, handled := handler.publicStatus(request); handled {
+		return status
+	}
 	segments := strings.Split(strings.Trim(request.URL.Path, "/"), "/")
 	if len(segments) == 0 || segments[0] == "" {
 		return http.StatusOK
@@ -340,7 +424,7 @@ func (handler SEOHandler) StatusCode(request *http.Request) int {
 			return http.StatusNotFound
 		}
 		if _, err := handler.blog.Repository().Post(segments[1], false); err != nil {
-			return http.StatusNotFound
+			return contentStatus(err)
 		}
 	case "releases":
 		if len(segments) == 1 || handler.blog == nil {
@@ -350,7 +434,10 @@ func (handler SEOHandler) StatusCode(request *http.Request) int {
 			return http.StatusNotFound
 		}
 		post, err := handler.blog.Repository().Post(segments[1], false)
-		if err != nil || post.Category != "release" {
+		if err != nil {
+			return contentStatus(err)
+		}
+		if post.Category != "release" {
 			return http.StatusNotFound
 		}
 	case "docs", "community", "lunastev", "questions", "rfcs", "source", "mail", "account", "login", "register", "admin", "search", "user", "patches":
@@ -376,6 +463,13 @@ func (handler SEOHandler) metadata(requestPath, base string) pageMetadata {
 	switch first {
 	case "":
 		metadata.SchemaType = "WebSite"
+		metadata.Items = []seoItem{
+			{Name: "Documentation", URL: handler.location(base, "docs", "en")},
+			{Name: "Blog", URL: handler.location(base, "blog")},
+			{Name: "Releases", URL: handler.location(base, "releases")},
+			{Name: "Community", URL: handler.location(base, "community")},
+			{Name: "Source", URL: handler.location(base, "source")},
+		}
 	case "docs":
 		metadata.Title = "Documentation · Wave"
 		metadata.Description = "Official Wave programming language guides and reference documentation."
@@ -389,6 +483,7 @@ func (handler SEOHandler) metadata(requestPath, base string) pageMetadata {
 			documentRoot = handler.location(base, "docs", documentLocale)
 		}
 		metadata.Language = documentLocale
+		metadata.Alternates = handler.documentAlternates(base, "")
 		metadata.Breadcrumbs = []seoBreadcrumb{home, {Name: "Documentation", URL: documentRoot}}
 		if len(segments) > documentStart && handler.documents != nil {
 			documentPath := strings.Join(segments[documentStart:], "/")
@@ -403,6 +498,8 @@ func (handler SEOHandler) metadata(requestPath, base string) pageMetadata {
 				}
 			}
 			if err == nil {
+				metadata.Markdown = document.Markdown
+				metadata.Alternates = handler.documentAlternates(base, documentPath)
 				metadata.Title = document.Title + " · Wave Documentation"
 				metadata.Headline = document.Title
 				metadata.Description = seoDescription(document.Summary.Summary, document.Title)
@@ -414,6 +511,12 @@ func (handler SEOHandler) metadata(requestPath, base string) pageMetadata {
 				metadata.Breadcrumbs = append(metadata.Breadcrumbs, seoBreadcrumb{Name: document.Title, URL: metadata.Canonical})
 			} else {
 				metadata = notFoundMetadata(metadata)
+			}
+		} else if handler.documents != nil {
+			if documents, err := handler.documents.Summaries(documentLocale); err == nil {
+				for _, document := range documents {
+					metadata.Items = append(metadata.Items, seoItem{Name: document.Title, URL: handler.location(base, "docs", documentLocale, document.Path)})
+				}
 			}
 		}
 	case "blog":
@@ -608,10 +711,14 @@ func notFoundMetadata(metadata pageMetadata) pageMetadata {
 	metadata.Items = nil
 	metadata.Comments = nil
 	metadata.CommentCount = 0
+	metadata.Markdown = ""
+	metadata.Alternates = nil
 	return metadata
 }
 
 func (handler SEOHandler) blogPostMetadata(metadata pageMetadata, post blogdomain.Post, base string) pageMetadata {
+	metadata.Language = post.ContentLanguage()
+	metadata.Markdown = post.Content
 	sectionName := "Blog"
 	sectionPath := "blog"
 	metadata.SchemaType = "BlogPosting"
@@ -690,9 +797,6 @@ func (handler SEOHandler) blogItems(base, section string) []seoItem {
 			continue
 		}
 		items = append(items, seoItem{Name: post.Title, URL: handler.location(base, postSection, post.Slug)})
-		if len(items) == 20 {
-			break
-		}
 	}
 	return items
 }
@@ -735,6 +839,9 @@ func seoDescription(value, fallback string) string {
 }
 
 func (handler SEOHandler) CanonicalRedirect(requestPath string) string {
+	if requestPath != "/" && strings.HasSuffix(requestPath, "/") {
+		return strings.TrimRight(requestPath, "/")
+	}
 	segments := strings.Split(strings.Trim(requestPath, "/"), "/")
 	if len(segments) >= 2 && segments[0] == "docs" && !supportedDocumentLocale(segments[1]) && handler.documents != nil {
 		documentPath := strings.Join(segments[1:], "/")

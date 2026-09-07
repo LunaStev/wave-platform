@@ -44,6 +44,7 @@ interface PageSEO {
   image?: string
   imageAlt?: string
   noIndex?: boolean
+  alternates?: Array<{ locale: string, path: string }>
 }
 
 function upsertMeta(selector: string, attributes: Record<string, string>) {
@@ -139,6 +140,15 @@ export function applyPageSEO(options: PageSEO) {
   optionalMeta('meta[property="article:section"]', section ? { property: 'article:section', content: section } : undefined)
   optionalMeta('meta[property="article:author"]', author ? { property: 'article:author', content: author } : undefined)
   upsertLink('link[rel="canonical"]', { rel: 'canonical', href: canonical })
+  document.head.querySelectorAll('link[data-wave-alternate]').forEach((element) => element.remove())
+  for (const alternate of options.alternates ?? []) {
+    const link = document.createElement('link')
+    link.rel = 'alternate'
+    link.hreflang = alternate.locale
+    link.href = canonicalURL(alternate.path)
+    link.dataset.waveAlternate = 'true'
+    document.head.append(link)
+  }
 
   let script = document.head.querySelector<HTMLScriptElement>('script[data-wave-schema]')
   if (options.noIndex || !options.schema) {
@@ -195,6 +205,9 @@ export function updateSEO(route: RouteLocationNormalizedLoaded, locale: Locale, 
   const privateService = ['mail', 'account', 'admin'].includes(service)
   const noIndex = privateService || nonIndexableRoutes.has(String(route.name ?? ''))
   const detail = Boolean(route.params.pathMatch || route.params.thread || route.params.question || route.params.number || route.params.repository || route.params.slug)
+  // Content pages own their metadata, including content language. A UI locale
+  // change must not overwrite it with generic service metadata.
+  if (!noIndex && (service === 'docs' || service === 'blog' && detail)) return
   applyPageSEO({ title, description, locale, path: route.path, noIndex, schema: { '@type': schemaType(service, detail) } })
 }
 

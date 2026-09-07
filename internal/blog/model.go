@@ -18,6 +18,7 @@ type Post struct {
 	Title           string    `xml:"title"`
 	Summary         string    `xml:"summary"`
 	Content         string    `xml:"content"`
+	Language        string    `xml:"language,omitempty"`
 	Status          string    `xml:"status"`
 	CommentPolicy   string    `xml:"comment-policy"`
 	AuthorAccountID string    `xml:"author-account-id"`

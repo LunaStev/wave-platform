@@ -72,7 +72,8 @@ type Summary struct {
 type View struct {
 	XMLName xml.Name `xml:"https://wave-lang.dev/ns/platform/api/v1 document"`
 	Summary
-	UpdatedAt string  `xml:"updated-at"`
-	Markdown  string  `xml:"content>markdown"`
-	Blocks    []Block `xml:"content>block"`
+	UpdatedAt    string    `xml:"updated-at"`
+	Markdown     string    `xml:"content>markdown"`
+	Blocks       []Block   `xml:"content>block"`
+	Translations []Summary `xml:"translations>document"`
 }

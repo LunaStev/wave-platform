@@ -214,7 +214,7 @@ watchEffect(() => {
 	applyPageSEO({
 		title: `${post.value.title} · ${release ? 'Wave Releases' : 'Wave Blog'}`,
 		description: plainTextDescription(post.value.summary || post.value.content, post.value.title),
-		locale: locale.value,
+		locale: post.value.language,
 		path: canonicalPath,
 		breadcrumbs: [
 			{ name: 'Home', path: '/' },

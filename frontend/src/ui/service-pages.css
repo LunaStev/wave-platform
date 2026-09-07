@@ -596,7 +596,7 @@
 .docs-locale-select select:focus-visible { outline: 2px solid var(--wave-focus); outline-offset: 2px; }
 .docs-translation-notice { margin: 0 0 20px; border-left: 3px solid var(--wave-accent); background: var(--wave-bg-subtle); color: var(--wave-text-secondary); padding: 10px 12px; font-size: 13px; }
 .community-language-policy { margin: 0; border-left: 3px solid var(--wave-border-strong); background: var(--wave-bg-subtle); color: var(--wave-text-secondary); padding: 9px 11px; font-size: 12px; line-height: 1.5; }
-.docs-service-header h1 { margin: 0; font-size: 19px; letter-spacing: -0.02em; }
+.docs-service-title { color: var(--wave-text); text-decoration: none; font-size: 19px; font-weight: 700; letter-spacing: -0.02em; }
 .docs-service-header span { color: var(--wave-text-muted); font-size: 12px; }
 .docs-search { display: flex; width: min(100%, 420px); height: 36px; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--wave-border-strong); border-radius: 4px; background: var(--wave-surface-raised); }
 .docs-search:focus-within { border-color: var(--service-accent); box-shadow: 0 0 0 2px var(--wave-accent-soft); }
@@ -626,14 +626,14 @@
 .docs-tree a { padding: 5px 9px; border-left: 2px solid transparent; color: var(--wave-text-secondary); font-size: 12px; line-height: 1.35; text-decoration: none; }
 .docs-tree a:hover { background: var(--wave-bg-subtle); color: var(--wave-text); }
 .docs-tree a.active { border-left-color: var(--service-accent); background: var(--wave-accent-soft); color: var(--wave-accent-text); font-weight: 680; }
-.document-page { min-width: 0; max-width: 820px; padding: 28px 48px 56px; border-right: 1px solid var(--wave-border); border-left: 1px solid var(--wave-border); }
+.document-page { min-width: 0; max-width: 860px; padding: 32px clamp(24px, 3vw, 44px) 64px; border-right: 1px solid var(--wave-border); border-left: 1px solid var(--wave-border); }
 .document-breadcrumb { display: flex; gap: 7px; margin-bottom: 22px; color: var(--wave-text-muted); font-size: 12px; }
 .document-breadcrumb a { color: var(--service-accent); text-decoration: none; }
 .document-page > header { padding-bottom: 10px; }
 .document-page > header h1 { margin: 0 0 10px; font-size: 30px; line-height: 1.25; letter-spacing: -.035em; }
 .document-page > header p { margin: 0; color: var(--wave-text-secondary); font-size: 15px; line-height: 1.6; }
 .document-page > header div { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; color: var(--wave-text-muted); font: 11px var(--wave-font-code); }
-.document-content { color: var(--wave-text); font-size: 15px; line-height: 1.75; }
+.document-content { color: var(--wave-text); font-size: 16px; line-height: 1.8; overflow-wrap: anywhere; }
 .document-content .markdown-content { width: 100%; min-width: 0; padding: 0; color: inherit; font: inherit; }
 .document-content h2 { margin: 32px 0 12px; padding-bottom: 0; border-bottom: 0; font-size: 22px; line-height: 1.35; }
 .document-content h3 { margin: 27px 0 9px; font-size: 18px; }
@@ -645,7 +645,7 @@
 .document-content pre { overflow-x: auto; margin: 17px 0 22px; padding: 18px 20px; border: 1px solid var(--wave-code-border); border-radius: 5px; background: var(--wave-code-bg); color: var(--wave-code-text); }
 .document-content pre code { color: inherit; font: 13px/1.65 var(--wave-font-code); font-variant-ligatures: none; white-space: pre; }
 .document-content pre .token.comment { color: var(--wave-code-comment); }.document-content pre .token.keyword { color: var(--wave-code-keyword); }.document-content pre .token.builtin { color: var(--wave-code-type); }.document-content pre .token.string { color: var(--wave-code-string); }.document-content pre .token.number { color: var(--wave-code-type); }.document-content pre .token.operator { color: var(--wave-code-operator); }
-.document-content table { display: table; width: 100%; margin: 18px 0 24px; border-collapse: collapse; font-size: 13px; }
+.document-content table { display: block; max-width: 100%; overflow-x: auto; margin: 18px 0 24px; border-collapse: collapse; font-size: 14px; }
 .document-content table th, .document-content table td { padding: 8px 10px; border: 1px solid var(--wave-border); text-align: left; vertical-align: top; }
 .document-content table th { background: var(--wave-bg-subtle); font-weight: 680; }
 .document-notice { margin: 18px 0; padding: 12px 14px; border-left: 3px solid var(--service-accent); background: var(--wave-accent-soft); }

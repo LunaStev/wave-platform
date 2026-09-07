@@ -121,7 +121,26 @@ func (repository *Repository) Published(locale, path string) (View, error) {
 		return View{}, fmt.Errorf("decode document content: %w", err)
 	}
 	return View{Summary: summaryOf(value), UpdatedAt: value.UpdatedAt.Format("2006-01-02"),
-		Markdown: content.Markdown, Blocks: content.Blocks}, nil
+		Markdown: content.Markdown, Blocks: content.Blocks, Translations: repository.PublishedTranslations(path)}, nil
+}
+
+func (repository *Repository) PublishedTranslations(path string) []Summary {
+	var result []Summary
+	for _, locale := range wavedoc.SupportedLocales {
+		id, err := repository.database.Get(storage.Key("document", "path", locale, path))
+		if err != nil {
+			continue
+		}
+		value, err := repository.Document(string(id))
+		if err != nil || value.Status != "published" || value.PublishedRevisionID == "" {
+			continue
+		}
+		if _, err := repository.Revision(value.ID, value.PublishedRevisionID); err != nil {
+			continue
+		}
+		result = append(result, summaryOf(value))
+	}
+	return result
 }
 
 func summaryOf(value Document) Summary {

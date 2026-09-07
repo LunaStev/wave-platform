@@ -13,7 +13,7 @@ summary: The Wave Explicit Memory Type Model, ptr<T>, arrays, address-of, deref,
 
 Wave's pointer design is based on the **Wave Explicit Memory Type Model**. This model defines pointers and arrays as explicit, language-level memory types rather than syntactic tricks or library abstractions. A type such as `ptr<T>` states directly that a value is a memory address interpreted as holding a `T`, while `array<T, N>` states both the element type and fixed element count.
 
-## ptr<T>
+## `ptr<T>`
 
 `ptr<T>` is the type of a memory address that points to a value of type `T`.
 
@@ -102,7 +102,7 @@ var bytes: i64 = third - base;  // 12
 
 Pointers can be compared with `==` and `!=`, including comparisons with `null`.
 
-## What ptr<T> does not track automatically
+## What `ptr<T>` does not track automatically
 
 The pointer type itself does not automatically track:
 

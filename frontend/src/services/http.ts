@@ -40,6 +40,7 @@ export interface BlogPostSummary {
 
 export interface BlogPost extends BlogPostSummary {
 	content: string
+	language: string
 	authorAccountId: string
 	createdAt: string
 }
@@ -103,6 +104,7 @@ export interface DocumentBlock {
 }
 
 export interface DocumentView extends DocumentSummary {
+	translations: DocumentSummary[]
   updatedAt: string
   markdown: string
   blocks: DocumentBlock[]
@@ -557,7 +559,20 @@ export interface QuestionView {
 	viewerVote: number
 }
 
+let initialPageData: Record<string, string> | undefined
+
 async function getXml(path: string): Promise<XMLDocument> {
+  if (!initialPageData) {
+    const element = document.getElementById('wave-page-data')
+    try { initialPageData = JSON.parse(element?.textContent || '{}') }
+    catch { initialPageData = {} }
+    element?.remove()
+  }
+  const initial = initialPageData?.[path]
+  if (typeof initial === 'string') {
+    delete initialPageData![path]
+    return parseXml(initial)
+  }
   const response = await fetch(path, {
     headers: { Accept: 'application/xml' },
   })
@@ -1316,6 +1331,7 @@ function parseBlogSummary(element: ParentNode): BlogPostSummary {
 function parseBlogPost(element: ParentNode): BlogPost {
 	return {
 		...parseBlogSummary(element), content: childContent(element, 'content'),
+		language: childText(element, 'language') || 'en',
 		authorAccountId: childText(element, 'author-account-id'), createdAt: childText(element, 'created-at'),
 	}
 }
@@ -1451,6 +1467,7 @@ export async function getDocument(path: string, locale: DocumentLocale): Promise
   return {
     ...parseDocumentSummary(root),
     updatedAt: childText(root, 'updated-at'),
+    translations: Array.from(root.querySelector('translations')?.children ?? []).map(parseDocumentSummary),
     markdown: content ? childText(content, 'markdown') : '',
     blocks,
   }
