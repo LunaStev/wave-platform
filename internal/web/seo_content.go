@@ -98,6 +98,16 @@ func (handler SEOHandler) documentAlternates(base, documentPath string) []seoAlt
 	return result
 }
 
+func (handler SEOHandler) documentCatalogAlternates(base, project string) []seoAlternate {
+	result := handler.documentAlternates(base, "")
+	if project == "whale" {
+		for i := range result {
+			result[i].URL += "/whale"
+		}
+	}
+	return result
+}
+
 // This is visible, useful HTML for every visitor, including browsers without
 // JavaScript. Vue replaces the app contents when it mounts; no bot detection or
 // hidden crawler-only copy is used.
@@ -111,6 +121,24 @@ func (handler SEOHandler) htmlContent(metadata pageMetadata) string {
 	escape := html.EscapeString
 	var body strings.Builder
 	body.WriteString(`<main class="public-reader" lang="` + escape(metadata.Language) + `"><nav aria-label="Main navigation"><a href="/">Wave</a><a href="/blog">Blog</a><a href="/releases">Releases</a><a href="/docs/en">Documentation</a></nav>`)
+	if metadata.DocumentProject != "" {
+		body.WriteString(`<nav aria-label="Documentation project">`)
+		for _, project := range []string{"wave", "whale"} {
+			path, name := "/docs/"+metadata.DocumentLocale, "Wave"
+			if project == "whale" {
+				path, name = path+"/whale", "Whale"
+			}
+			current := ""
+			if project == metadata.DocumentProject {
+				current = ` aria-current="page"`
+			}
+			body.WriteString(`<a href="` + escape(path) + `"` + current + `>` + name + `</a>`)
+		}
+		body.WriteString(`</nav>`)
+		if metadata.SchemaType == "CollectionPage" && len(metadata.Items) == 0 {
+			body.WriteString(`<p>No documents have been published for this project yet.</p>`)
+		}
+	}
 	if len(metadata.Alternates) > 0 {
 		body.WriteString(`<nav aria-label="Document language">`)
 		for _, alt := range metadata.Alternates {

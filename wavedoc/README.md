@@ -11,6 +11,13 @@ published.
 English is the fallback when a page has not been translated yet. A fallback
 page is displayed as English and is never labelled as a completed translation.
 
+Wave and Whale have separate navigation. Add Whale documents under
+`{locale}/whale/` with a front-matter `path` beginning with `whale/`; they appear
+at `/docs/{locale}/whale/{page}` after rebuilding and restarting the application.
+All other paths remain in the Wave catalogue. No frontend registration is
+required. See [authoring instructions](../docs/document-authoring.md) for metadata,
+ordering, and translation rules.
+
 Documentation describes the Wave language without attaching the manual to a
 product version. Local variables are declared with `var`.
 

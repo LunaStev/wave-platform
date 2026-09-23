@@ -85,6 +85,7 @@ export interface DocumentSummary {
   path: string
   locale: DocumentLocale
   group: string
+  groupOrder: number
   order: number
   title: string
   summary: string
@@ -561,6 +562,14 @@ export interface QuestionView {
 
 let initialPageData: Record<string, string> | undefined
 
+export class HTTPError extends Error {
+  status: number
+  constructor(status: number) {
+    super(`Request failed (${status})`)
+    this.status = status
+  }
+}
+
 async function getXml(path: string): Promise<XMLDocument> {
   if (!initialPageData) {
     const element = document.getElementById('wave-page-data')
@@ -579,7 +588,7 @@ async function getXml(path: string): Promise<XMLDocument> {
 
   const body = await response.text()
   if (!response.ok) {
-    throw new Error(`요청 실패 (${response.status})`)
+    throw new HTTPError(response.status)
   }
 
   return parseXml(body)
@@ -1434,6 +1443,7 @@ function parseDocumentSummary(element: Element): DocumentSummary {
     path: childText(element, 'path'),
     locale: childText(element, 'locale') as DocumentLocale,
     group: childText(element, 'group'),
+    groupOrder: Number(childText(element, 'group-order')) || 0,
     order: Number(childText(element, 'order')) || 0,
     title: childText(element, 'title'),
     summary: childText(element, 'summary'),

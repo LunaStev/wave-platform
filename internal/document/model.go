@@ -60,13 +60,14 @@ type TableRow struct {
 }
 
 type Summary struct {
-	ID      string `xml:"id"`
-	Path    string `xml:"path"`
-	Locale  string `xml:"locale"`
-	Group   string `xml:"group"`
-	Order   int    `xml:"order"`
-	Title   string `xml:"title"`
-	Summary string `xml:"summary"`
+	ID         string `xml:"id"`
+	Path       string `xml:"path"`
+	Locale     string `xml:"locale"`
+	Group      string `xml:"group"`
+	GroupOrder int    `xml:"group-order"`
+	Order      int    `xml:"order"`
+	Title      string `xml:"title"`
+	Summary    string `xml:"summary"`
 }
 
 type View struct {

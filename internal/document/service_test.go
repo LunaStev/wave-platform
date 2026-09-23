@@ -142,8 +142,16 @@ func TestSeedOfficialPublishesSupportedDocumentationLocales(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = database.Close() })
 
+	sources, _, err := readOfficialDocuments()
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectedCounts := make(map[string]int)
+	for _, source := range sources {
+		expectedCounts[source.Locale]++
+	}
 	count, err := SeedOfficial(database)
-	if err != nil || count != 87 {
+	if err != nil || count != len(sources) {
 		t.Fatalf("seed count=%d err=%v", count, err)
 	}
 	repository := NewRepository(database)
@@ -154,7 +162,7 @@ func TestSeedOfficialPublishesSupportedDocumentationLocales(t *testing.T) {
 	}
 	for _, locale := range []string{"en", "ko", "ja"} {
 		items, err := repository.Summaries(locale)
-		if err != nil || len(items) != 27 {
+		if err != nil || len(items) != expectedCounts[locale] {
 			t.Fatalf("%s summaries=%d err=%v", locale, len(items), err)
 		}
 		view, err := repository.Published(locale, "language/explicit-memory-type-model")
@@ -170,8 +178,11 @@ func TestSeedOfficialPublishesSupportedDocumentationLocales(t *testing.T) {
 	}
 	for _, locale := range []string{"zh", "es", "de", "ru", "id", "vi"} {
 		items, err := repository.Summaries(locale)
-		if err != nil || len(items) != 1 || items[0].Path != "getting-started/overview" {
+		if err != nil || len(items) != expectedCounts[locale] {
 			t.Fatalf("%s summaries=%#v err=%v", locale, items, err)
+		}
+		if _, err := repository.Published(locale, "getting-started/overview"); err != nil {
+			t.Fatalf("%s overview: %v", locale, err)
 		}
 	}
 	install, err := repository.Published("en", "getting-started/install")
