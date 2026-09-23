@@ -1,0 +1,48 @@
+name: WaveEditor and Frontend CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            editor/package-lock.json
+            frontend/package-lock.json
+
+      - name: Install editor dependencies
+        working-directory: editor
+        run: npm ci
+
+      - name: Run editor tests
+        working-directory: editor
+        run: npm test
+
+      - name: Build editor
+        working-directory: editor
+        run: npm run build
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
