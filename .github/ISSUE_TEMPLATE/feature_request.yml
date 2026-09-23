@@ -1,0 +1,72 @@
+name: Feature Request
+description: Suggest an improvement or new capability for Wave Platform.
+title: "[Feature]: "
+labels:
+  - enhancement
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Problem
+
+        Describe the problem this feature solves and the expected outcome.
+
+        Do not include:
+        - .env contents
+        - TOTP secrets
+        - Recovery tokens
+        - Webhook URLs
+        - Private email addresses
+
+        Security vulnerabilities should be reported through a private channel when available.
+
+        Review the repository README and documentation before opening a request.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What problem are you trying to solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe your suggested solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Which services, modules, or documentation areas are affected?
+    validations:
+      required: true
+
+  - type: textarea
+    id: completion
+    attributes:
+      label: Completion criteria
+      description: How will we know this feature is complete?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Optional alternative approaches.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Verification
+      options:
+        - label: I searched existing issues before opening this request.
+          required: true
+        - label: I reviewed existing documentation and related issues.
+          required: true

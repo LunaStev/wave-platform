@@ -1,0 +1,93 @@
+name: Bug Report
+description: Report a reproducible code bug in Wave Platform.
+title: "[Bug]: "
+labels:
+  - bug
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Problem
+
+        Please search existing issues before creating a new report.
+
+        Do not include:
+        - .env contents
+        - TOTP secrets
+        - Recovery tokens
+        - Webhook URLs
+        - Private email addresses
+
+        Production DNS, hosting, deployment, configuration, or support questions are not code bugs.
+
+        Review the repository README and documentation before opening a report.
+
+  - type: input
+    id: service
+    attributes:
+      label: Affected service
+      description: Which part of Wave Platform is affected?
+      placeholder: frontend, editor, mail, search, authentication
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the issue.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Safe reproduction steps
+      description: Provide steps that reproduce the issue without exposing secrets.
+      placeholder: |
+        1. Go to ...
+        2. Click ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Which services, modules, or areas are affected?
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, browser, Node version, Go version, deployment details, etc.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Verification
+      options:
+        - label: I searched existing issues before opening this report.
+          required: true
+        - label: I have removed secrets and sensitive information.
+          required: true
