@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	documentdomain "github.com/wavefnd/wave-platform/internal/document"
 	"github.com/wavefnd/wave-platform/internal/storage"
 )
 
@@ -37,10 +38,11 @@ func (handler SEOHandler) publicStatus(request *http.Request) (int, bool) {
 		if supportedDocumentLocale(parts[1]) {
 			locale, start = parts[1], 2
 		}
-		if len(parts) == start {
-			return http.StatusOK, true
-		}
 		documentPath := strings.Join(parts[start:], "/")
+		if documentPath == "" || documentPath == "whale" {
+			_, err := handler.documents.Navigation(locale, documentdomain.ProjectForPath(documentPath+"/"))
+			return contentStatus(err), true
+		}
 		_, err := handler.documents.Published(locale, documentPath)
 		if errors.Is(err, storage.ErrNotFound) && locale != "en" {
 			_, err = handler.documents.Published("en", documentPath)

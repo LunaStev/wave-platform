@@ -69,16 +69,20 @@ func SeedOfficial(database *storage.Database) (int, error) {
 }
 
 func readOfficialDocuments() ([]seedDocument, []byte, error) {
+	return readOfficialDocumentsFrom(wavedoc.Content)
+}
+
+func readOfficialDocumentsFrom(sourceFS fs.FS) ([]seedDocument, []byte, error) {
 	result := make([]seedDocument, 0, 48)
 	hash := sha256.New()
-	err := fs.WalkDir(wavedoc.Content, ".", func(name string, entry fs.DirEntry, walkErr error) error {
+	err := fs.WalkDir(sourceFS, ".", func(name string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
 		if entry.IsDir() || !strings.HasSuffix(strings.ToLower(name), ".md") {
 			return nil
 		}
-		source, err := wavedoc.Content.ReadFile(name)
+		source, err := fs.ReadFile(sourceFS, name)
 		if err != nil {
 			return err
 		}

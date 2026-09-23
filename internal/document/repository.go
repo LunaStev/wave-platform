@@ -145,5 +145,5 @@ func (repository *Repository) PublishedTranslations(path string) []Summary {
 
 func summaryOf(value Document) Summary {
 	return Summary{ID: value.ID, Path: value.Path, Locale: value.Locale, Group: value.Group,
-		Order: value.Order, Title: value.Title, Summary: value.Summary}
+		GroupOrder: value.GroupOrder, Order: value.Order, Title: value.Title, Summary: value.Summary}
 }

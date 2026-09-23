@@ -6,7 +6,8 @@ import { useRoute, useRouter } from 'vue-router'
 import MarkdownContent from '../components/MarkdownContent.vue'
 import { useI18n } from '../i18n'
 import { documentLocales, isDocumentLocale, saveDocumentLocale } from '../services/documentLocale'
-import { getDocument, getDocuments, type DocumentLocale, type DocumentSummary, type DocumentView } from '../services/http'
+import { documentationCatalog, documentationPath, documentationProject, projectDocuments } from '../services/documentNavigation'
+import { HTTPError, getDocument, getDocuments, type DocumentLocale, type DocumentSummary, type DocumentView } from '../services/http'
 import { applyPageSEO } from '../services/seo'
 import UiInlineState from '../ui/UiInlineState.vue'
 import UiSkeletonRows from '../ui/UiSkeletonRows.vue'
@@ -24,10 +25,15 @@ const showingEnglishFallback = ref(false)
 const docLocale = computed<DocumentLocale>(() => isDocumentLocale(route.params.docLocale) ? route.params.docLocale : 'en')
 const docBase = computed(() => `/docs/${docLocale.value}`)
 
-const currentPath = computed(() => {
+const requestedPath = computed(() => {
+  if (route.meta.documentationProject === 'whale') return 'whale'
   const value = route.params.pathMatch
   return Array.isArray(value) ? value.join('/') : String(value ?? '')
 })
+const currentPath = computed(() => documentationPath(requestedPath.value))
+const project = computed(() => documentationProject(requestedPath.value))
+const projectName = computed(() => project.value === 'whale' ? 'Whale' : 'Wave')
+const catalogBase = computed(() => documentationCatalog(docLocale.value, project.value))
 const filtered = computed(() => {
   const needle = query.value.trim().toLocaleLowerCase(docLocale.value)
   if (!needle) return documents.value
@@ -46,45 +52,51 @@ const next = computed(() => currentIndex.value >= 0 && currentIndex.value < docu
 function groupName(group: string) {
   const names: Record<string, string> = {
     'getting-started': t('docs.gettingStarted'), language: t('docs.language'),
-    reference: t('docs.reference'), toolchain: t('docs.tools'),
+    reference: t('docs.reference'), toolchain: t('docs.tools'), whale: 'Whale',
   }
   return names[group] ?? group
 }
 
+let loadGeneration = 0
 async function load() {
+  const generation = ++loadGeneration
+  const requestedLocale = docLocale.value
+  const path = currentPath.value
+  const selectedProject = project.value
   loading.value = true
+  document.value = null
   failed.value = false
   showingEnglishFallback.value = false
   try {
-    saveDocumentLocale(docLocale.value)
-    const translated = await getDocuments(docLocale.value)
-    if (docLocale.value === 'en') {
-      documents.value = translated
-    } else {
-      const english = await getDocuments('en')
-      const translatedPaths = new Set(translated.map((item) => item.path))
-      documents.value = [...translated, ...english.filter((item) => !translatedPaths.has(item.path))]
-    }
-    if (!currentPath.value) {
-      document.value = null
-    } else {
+    saveDocumentLocale(requestedLocale)
+    const [translated, english] = await Promise.all([
+      getDocuments(requestedLocale), requestedLocale === 'en' ? Promise.resolve([]) : getDocuments('en'),
+    ])
+    let loadedDocument: DocumentView | null = null
+    let fallback = false
+    if (path) {
       try {
-        document.value = await getDocument(currentPath.value, docLocale.value)
+        loadedDocument = await getDocument(path, requestedLocale)
       } catch (error) {
-        if (docLocale.value === 'en') throw error
-        document.value = await getDocument(currentPath.value, 'en')
-        showingEnglishFallback.value = true
+        if (requestedLocale === 'en' || !(error instanceof HTTPError) || error.status !== 404) throw error
+        loadedDocument = await getDocument(path, 'en')
+        fallback = true
       }
     }
+    if (generation !== loadGeneration) return
+    documents.value = projectDocuments(translated, english, selectedProject)
+    document.value = loadedDocument
+    showingEnglishFallback.value = fallback
   } catch {
+    if (generation !== loadGeneration) return
     failed.value = true
     document.value = null
   } finally {
-    loading.value = false
+    if (generation === loadGeneration) loading.value = false
   }
 }
 
-watch([currentPath, docLocale], load, { immediate: true })
+watch([requestedPath, docLocale], () => { query.value = ''; void load() }, { immediate: true })
 
 function changeDocumentLocale(event: Event) {
   const value = (event.target as HTMLSelectElement).value
@@ -92,21 +104,21 @@ function changeDocumentLocale(event: Event) {
   saveDocumentLocale(value)
   router.push(currentPath.value
     ? { name: 'document', params: { docLocale: value, pathMatch: currentPath.value.split('/') } }
-    : { name: 'docs-locale', params: { docLocale: value } })
+    : { name: project.value === 'whale' ? 'docs-whale' : 'docs-locale', params: { docLocale: value } })
 }
 watchEffect(() => {
   if (!document.value) {
     applyPageSEO({
-      title: failed.value ? 'Page not found · Wave' : 'Documentation · Wave',
-      description: failed.value ? 'The requested document could not be loaded.' : 'Official Wave programming language guides and reference documentation.',
+      title: failed.value ? 'Page not found · Wave' : project.value === 'whale' ? 'Whale Documentation · Wave' : 'Documentation · Wave',
+      description: failed.value ? 'The requested document could not be loaded.' : project.value === 'whale' ? 'Whale guides and reference documentation.' : 'Official Wave programming language guides and reference documentation.',
       locale: docLocale.value, path: route.path, noIndex: failed.value,
       schema: { '@type': 'CollectionPage' },
-      alternates: !currentPath.value ? [...documentLocales.map((item) => ({ locale: item.id, path: `/docs/${item.id}` })), { locale: 'x-default', path: '/docs/en' }] : [],
+      alternates: !currentPath.value ? [...documentLocales.map((item) => ({ locale: item.id, path: documentationCatalog(item.id, project.value) })), { locale: 'x-default', path: documentationCatalog('en', project.value) }] : [],
     })
     return
   }
   applyPageSEO({
-    title: `${document.value.title} · Wave Documentation`,
+    title: `${document.value.title} · ${projectName.value} Documentation`,
     description: document.value.summary,
     locale: document.value.locale,
     alternates: [
@@ -116,7 +128,7 @@ watchEffect(() => {
     path: showingEnglishFallback.value ? `/docs/en/${currentPath.value}` : route.path,
     breadcrumbs: [
       { name: 'Home', path: '/' },
-      { name: 'Documentation', path: `/docs/${document.value.locale}` },
+      { name: `${projectName.value} Documentation`, path: documentationCatalog(document.value.locale, project.value) },
       { name: document.value.title, path: showingEnglishFallback.value ? `/docs/en/${currentPath.value}` : route.path },
     ],
     schema: {
@@ -136,15 +148,18 @@ watchEffect(() => {
   <main class="docs-service">
     <header class="docs-service-header">
       <div class="docs-width docs-service-header-inner">
-        <div><RouterLink class="docs-service-title" :to="docBase">{{ t('docs.title') }}</RouterLink></div>
+        <div><RouterLink class="docs-service-title" :to="catalogBase">{{ t('docs.title') }}</RouterLink></div>
         <label class="docs-locale-select">
           <span>{{ t('docs.languageSelector') }}</span>
           <select :value="docLocale" @change="changeDocumentLocale">
             <option v-for="option in documentLocales" :key="option.id" :value="option.id">{{ option.label }}</option>
           </select>
         </label>
-        <label class="docs-search"><Search :size="16" aria-hidden="true" /><input v-model="query" :placeholder="t('docs.search')" /></label>
+        <label class="docs-search"><Search :size="16" aria-hidden="true" /><input v-model="query" :aria-label="t('docs.search')" :placeholder="t('docs.search')" /></label>
       </div>
+      <nav class="docs-width docs-project-tabs" :aria-label="t('docs.projectSelector')">
+        <RouterLink v-for="item in (['wave', 'whale'] as const)" :key="item" :to="documentationCatalog(docLocale, item)" :class="{ active: project === item }" :aria-current="project === item ? 'page' : undefined">{{ item === 'wave' ? 'Wave' : 'Whale' }}</RouterLink>
+      </nav>
     </header>
 
     <div v-if="loading" class="docs-width docs-loading"><UiSkeletonRows :rows="8" /></div>
@@ -169,7 +184,7 @@ watchEffect(() => {
       </details>
 
       <article class="document-page">
-        <nav class="document-breadcrumb"><RouterLink :to="docBase">{{ t('docs.title') }}</RouterLink><span>/</span><span>{{ groupName(document.group) }}</span></nav>
+        <nav class="document-breadcrumb"><RouterLink :to="catalogBase">{{ projectName }} {{ t('docs.title') }}</RouterLink><span>/</span><span>{{ groupName(document.group) }}</span></nav>
         <p v-if="showingEnglishFallback" class="docs-translation-notice" role="status">{{ t('docs.englishFallback') }}</p>
         <header><h1>{{ document.title }}</h1><p>{{ document.summary }}</p></header>
         <div class="document-content"><MarkdownContent :source="document.markdown" /></div>
@@ -183,14 +198,14 @@ watchEffect(() => {
     </div>
 
     <div v-else class="docs-width docs-catalog-page">
-      <header class="docs-titlebar"><h1>{{ t('docs.title') }}</h1><p>{{ t('docs.lead') }}</p></header>
+      <header class="docs-titlebar"><h1>{{ projectName }} {{ t('docs.title') }}</h1><p>{{ project === 'whale' ? t('docs.whaleLead') : t('docs.lead') }}</p></header>
       <div class="docs-catalog">
         <section v-for="group in groups" :key="group.id" class="docs-catalog-group">
           <h2>{{ group.title }}</h2>
           <ul><li v-for="item in group.items" :key="item.path"><RouterLink :to="`${docBase}/${item.path}`"><strong>{{ item.title }}</strong><span>{{ item.summary }}</span></RouterLink></li></ul>
         </section>
       </div>
-      <p v-if="groups.length === 0" class="docs-empty">{{ t('docs.noResults') }}</p>
+      <p v-if="groups.length === 0" class="docs-empty" role="status">{{ t(documents.length === 0 ? 'docs.emptyProject' : 'docs.noResults') }}</p>
     </div>
   </main>
 </template>

@@ -589,6 +589,11 @@
 /* Documentation */
 .docs-service { min-height: 720px; background: var(--wave-surface); }
 .docs-service-header { border-bottom: 1px solid var(--wave-border); background: var(--wave-bg-subtle); }
+.docs-project-tabs { display: flex; gap: 8px; }
+.docs-project-tabs a { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 20px; border-bottom: 3px solid transparent; color: var(--wave-text-secondary); text-decoration: none; }
+.docs-project-tabs a.active { border-bottom-color: var(--wave-accent); color: var(--wave-text); font-weight: 700; }
+.docs-project-tabs a:hover { background: var(--wave-surface); }
+.docs-project-tabs a:focus-visible { outline: 2px solid var(--wave-focus); outline-offset: -3px; }
 .docs-service-header-inner { display: flex; min-height: 62px; align-items: center; justify-content: space-between; gap: 28px; }
 .docs-service-header-inner > div { display: flex; align-items: baseline; gap: 10px; }
 .docs-locale-select { display: grid; gap: 3px; margin-left: auto; color: var(--wave-text-muted); font-size: 11px; }

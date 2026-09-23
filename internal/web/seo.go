@@ -3,6 +3,7 @@ package web
 import (
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"html"
 	"net/http"
@@ -19,6 +20,7 @@ import (
 	"github.com/wavefnd/wave-platform/internal/gitmirror"
 	questiondomain "github.com/wavefnd/wave-platform/internal/question"
 	rfcdomain "github.com/wavefnd/wave-platform/internal/rfc"
+	"github.com/wavefnd/wave-platform/internal/storage"
 )
 
 type sitemapURL struct {
@@ -50,27 +52,29 @@ type SEOHandler struct {
 }
 
 type pageMetadata struct {
-	Title          string
-	Headline       string
-	Description    string
-	Canonical      string
-	Robots         string
-	OpenGraph      string
-	SchemaType     string
-	AuthorName     string
-	AuthorURL      string
-	PublishedAt    string
-	ModifiedAt     string
-	ArticleSection string
-	Image          string
-	ImageAlt       string
-	Breadcrumbs    []seoBreadcrumb
-	Items          []seoItem
-	Comments       []seoComment
-	CommentCount   int
-	Language       string
-	Markdown       string
-	Alternates     []seoAlternate
+	Title           string
+	Headline        string
+	Description     string
+	Canonical       string
+	Robots          string
+	OpenGraph       string
+	SchemaType      string
+	AuthorName      string
+	AuthorURL       string
+	PublishedAt     string
+	ModifiedAt      string
+	ArticleSection  string
+	Image           string
+	ImageAlt        string
+	Breadcrumbs     []seoBreadcrumb
+	Items           []seoItem
+	Comments        []seoComment
+	CommentCount    int
+	Language        string
+	Markdown        string
+	Alternates      []seoAlternate
+	DocumentProject string
+	DocumentLocale  string
 }
 
 type seoBreadcrumb struct {
@@ -136,6 +140,12 @@ func (handler SEOHandler) Sitemap(writer http.ResponseWriter, request *http.Requ
 				return
 			}
 			entries = append(entries, sitemapURL{Location: handler.location(base, "docs", locale)})
+			for _, document := range documents {
+				if documentdomain.ProjectForPath(document.Path) == "whale" {
+					entries = append(entries, sitemapURL{Location: handler.location(base, "docs", locale, "whale")})
+					break
+				}
+			}
 			for _, document := range documents {
 				view, err := handler.documents.Published(locale, document.Path)
 				if err != nil {
@@ -483,24 +493,35 @@ func (handler SEOHandler) metadata(requestPath, base string) pageMetadata {
 			documentRoot = handler.location(base, "docs", documentLocale)
 		}
 		metadata.Language = documentLocale
-		metadata.Alternates = handler.documentAlternates(base, "")
-		metadata.Breadcrumbs = []seoBreadcrumb{home, {Name: "Documentation", URL: documentRoot}}
-		if len(segments) > documentStart && handler.documents != nil {
-			documentPath := strings.Join(segments[documentStart:], "/")
+		documentPath := strings.Join(segments[documentStart:], "/")
+		project := documentdomain.ProjectForPath(documentPath + "/")
+		projectName := "Wave"
+		catalogPath := ""
+		if project == "whale" {
+			projectName, catalogPath = "Whale", "whale"
+			documentRoot = handler.location(base, "docs", documentLocale, catalogPath)
+			metadata.Title = "Whale Documentation · Wave"
+			metadata.Description = "Whale guides and reference documentation."
+		}
+		metadata.DocumentProject = project
+		metadata.DocumentLocale = documentLocale
+		metadata.Alternates = handler.documentCatalogAlternates(base, project)
+		metadata.Breadcrumbs = []seoBreadcrumb{home, {Name: projectName + " Documentation", URL: documentRoot}}
+		if documentPath != "" && documentPath != "whale" && handler.documents != nil {
 			document, err := handler.documents.Published(documentLocale, documentPath)
-			if err != nil && documentLocale != "en" {
+			if errors.Is(err, storage.ErrNotFound) && documentLocale != "en" {
 				if fallback, fallbackErr := handler.documents.Published("en", documentPath); fallbackErr == nil {
 					document = fallback
 					err = nil
 					metadata.Language = "en"
 					metadata.Canonical = handler.location(base, "docs", "en", documentPath)
-					metadata.Breadcrumbs = []seoBreadcrumb{home, {Name: "Documentation", URL: handler.location(base, "docs", "en")}}
+					metadata.Breadcrumbs = []seoBreadcrumb{home, {Name: projectName + " Documentation", URL: handler.location(base, "docs", "en", catalogPath)}}
 				}
 			}
 			if err == nil {
 				metadata.Markdown = document.Markdown
 				metadata.Alternates = handler.documentAlternates(base, documentPath)
-				metadata.Title = document.Title + " · Wave Documentation"
+				metadata.Title = document.Title + " · " + projectName + " Documentation"
 				metadata.Headline = document.Title
 				metadata.Description = seoDescription(document.Summary.Summary, document.Title)
 				metadata.OpenGraph = "article"
@@ -513,7 +534,7 @@ func (handler SEOHandler) metadata(requestPath, base string) pageMetadata {
 				metadata = notFoundMetadata(metadata)
 			}
 		} else if handler.documents != nil {
-			if documents, err := handler.documents.Summaries(documentLocale); err == nil {
+			if documents, err := handler.documents.Navigation(documentLocale, project); err == nil {
 				for _, document := range documents {
 					metadata.Items = append(metadata.Items, seoItem{Name: document.Title, URL: handler.location(base, "docs", documentLocale, document.Path)})
 				}
