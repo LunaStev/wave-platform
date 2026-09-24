@@ -44,6 +44,36 @@ Statements following return, break, or continue remain represented in disconnect
 
 Retaining such statements is useful for inspecting the original program structure. It does not cause them to execute after the terminator.
 
+## Preserved IR example
+
+The following module passes verification and shows the current printer representation of an unused computation, a compile-time declaration, and a disconnected block:
+
+```text
+module {
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  fn @preserved() -> void {
+  entry:
+    %v0: i32 = const i32 1
+    %v1: i32 = const i32 2
+    %v2: i32 = add i32 %v0, %v1
+    %v3: i32 = const_decl "count" add(i32 1, i32 2) => const i32 3
+    ret void
+  unreachable.cont:
+    %v4: i32 = const i32 4
+    %v5: i32 = const i32 5
+    %v6: i32 = add i32 %v4, %v5
+    ret void
+  }
+
+}
+```
+
+`%v2` remains an `add` even though it has no uses. `%v3` is a separate `const_decl`: it retains `add(i32 1, i32 2)` and the evaluated result 3. The `unreachable.cont` block has no incoming edge, so its `%v6` addition remains inspectable without adding an execution path after `ret void`.
+
+Verification preserves these instructions and blocks. This example demonstrates IR construction, verification, and printing; it does not imply available native execution or DWARF emission.
+
 ## Source and stack information
 
 The debug interface uses DWARF 5 for function records, source lines, basic local variables, and call-frame information. Function and local-variable information must remain associated with original IR identities through lowering.

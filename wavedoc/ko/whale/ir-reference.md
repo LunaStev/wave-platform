@@ -17,6 +17,50 @@ summary: 타입, 식별자, 함수의 유효성, 평가 순서와 교환 형식�
 
 각 값 정의는 식별자를 갖습니다. 정의는 중복될 수 없고, 타입 메타데이터는 정의에 명시된 타입과 일치해야 합니다. 이름이 같은 선언이 서로를 가리는 경우에도 이름만으로 정의를 식별하지 않습니다.
 
+## IR 구성과 읽기
+
+다음은 `ir` 크레이트로 함수를 구성하고 검증한 뒤 typed IR을 출력하는 완전한 Rust 예제입니다.
+
+```rust
+use ir::{ModuleBuilder, Target, Type};
+
+fn main() {
+    let target = Target::lookup("x86_64-whale-linux").unwrap();
+    let mut module = ModuleBuilder::new(target.name(), target.data_layout());
+    let mut function = module.begin_function("answer", vec![], Type::I32);
+    let left = function.const_i32(40);
+    let right = function.const_i32(2);
+    let answer = function.add(Type::I32, left, right);
+    function.ret(Some(answer));
+    function.finish();
+    let module = module.finish();
+    ir::verify_module(&module).unwrap();
+    print!("{}", ir::print_module(&module));
+}
+```
+
+프린터는 다음 IR을 출력합니다.
+
+```text
+module {
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  fn @answer() -> i32 {
+  entry:
+    %v0: i32 = const i32 40
+    %v1: i32 = const i32 2
+    %v2: i32 = add i32 %v0, %v1
+    ret i32 %v2
+  }
+
+}
+```
+
+`%v0`과 `%v1`은 i32 상수의 정의입니다. `add`가 정의한 `%v2`를 함수의 i32 반환값으로 사용합니다. 반환값을 Bool로 바꾸면 함수 서명에 맞지 않아 검증 오류가 됩니다. 두 피연산자가 상수여도 O0에서는 덧셈 명령을 유지합니다.
+
+이 코드는 실제 프린터 출력이며 텍스트 파서에 전달할 입력 파일이 아닙니다. 텍스트 파싱과 IR 실행은 아직 지원하지 않으며, 현재는 Rust builder로 이 모듈을 구성할 수 있습니다.
+
 ## 타입
 
 | 타입 | 의미 |

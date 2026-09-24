@@ -17,6 +17,50 @@ Functions and global variables occupy separate internal namespaces. A function a
 
 Each value definition has an identity. Definitions must be unique, and their type metadata must agree with their declared types. A name is not a substitute for identity when declarations shadow each other.
 
+## Constructing and reading IR
+
+This complete Rust example uses the `ir` crate to construct a function, verify it, and print its typed IR:
+
+```rust
+use ir::{ModuleBuilder, Target, Type};
+
+fn main() {
+    let target = Target::lookup("x86_64-whale-linux").unwrap();
+    let mut module = ModuleBuilder::new(target.name(), target.data_layout());
+    let mut function = module.begin_function("answer", vec![], Type::I32);
+    let left = function.const_i32(40);
+    let right = function.const_i32(2);
+    let answer = function.add(Type::I32, left, right);
+    function.ret(Some(answer));
+    function.finish();
+    let module = module.finish();
+    ir::verify_module(&module).unwrap();
+    print!("{}", ir::print_module(&module));
+}
+```
+
+The printer produces:
+
+```text
+module {
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  fn @answer() -> i32 {
+  entry:
+    %v0: i32 = const i32 40
+    %v1: i32 = const i32 2
+    %v2: i32 = add i32 %v0, %v1
+    ret i32 %v2
+  }
+
+}
+```
+
+`%v0` and `%v1` define i32 constants. `add` defines `%v2`, which supplies the function's i32 return. Changing the return value to a Bool would violate the signature and fail verification. The addition remains an instruction at O0 even though both operands are constant.
+
+These are actual printer outputs, not input files for a text parser. Text parsing and IR execution are not yet available; the Rust builder is the available way to construct this module.
+
 ## Types
 
 | Type | Meaning |

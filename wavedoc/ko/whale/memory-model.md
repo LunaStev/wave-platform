@@ -27,6 +27,29 @@ native 주소는 64비트를 유지합니다. 별도의 shadow metadata가 복�
 
 BSS의 물리적인 바이트가 0이라는 사실만으로 IR 변수의 초기화가 성립하지 않습니다.
 
+### 초기화된 스칼라 저장 공간의 IR
+
+다음 모듈은 builder로 구성해 검증기를 통과했습니다. 값을 읽기 전에 `store`하며, 세 메모리 명령 모두 0이 아닌 2의 거듭제곱 정렬을 명시합니다.
+
+```text
+module {
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  fn @initialized_local() -> i32 {
+  entry:
+    %v0: ptr<i32> = alloca i32, align 4
+    %v1: i32 = const i32 42
+    store i32 %v1, ptr<i32> %v0, align 4
+    %v2: i32 = load i32, ptr<i32> %v0, align 4
+    ret i32 %v2
+  }
+
+}
+```
+
+`alloca`는 i32 저장 공간을 만들고, `store`는 42를 쓰며, `load`는 반환할 값을 정의합니다. 이 코드는 typed IR 프린터 출력이며 native 실행 기록이 아닙니다. 정렬을 3으로 바꾸면 검증 오류입니다. Store를 제거하면 이 메모리 모델에서는 미초기화 읽기 trap이 필요하지만, 초기화 추적과 해당 런타임 trap 검사는 아직 제공되지 않습니다. 현재 검증기를 통과했다는 사실만으로 그러한 읽기가 안전하다고 판단해서는 안 됩니다.
+
 ## 포인터 산술과 비교
 
 주소 계산 overflow는 trap입니다. 할당 범위의 바로 다음을 가리키는 one-past 포인터는 만들 수 있지만, 이를 통해 메모리에 접근할 수는 없습니다.
