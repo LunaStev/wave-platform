@@ -13,7 +13,7 @@ summary: 정수 wrap, checked 연산, 시프트, 형변환 오류와 부동소�
 
 N비트 정수는 N개의 값 비트를 갖습니다. 부호 없는 정수의 범위는 0부터 2^N − 1까지이고, 부호 있는 정수의 범위는 −2^(N−1)부터 2^(N−1) − 1까지입니다. 연산의 signedness가 비트열의 해석을 결정합니다.
 
-아래 예제는 연산 결과를 설명하며 텍스트 IR 문법을 나타내지 않습니다.
+아래 표는 연산 결과를 설명합니다. IR 코드 예제는 현재 프린터의 표현을 사용합니다.
 
 ## 덧셈·뺄셈·곱셈
 
@@ -27,6 +27,39 @@ N비트 정수는 N개의 값 비트를 갖습니다. 부호 없는 정수의 �
 | i8: 12 × 3 | 36 | false |
 
 overflow에서 실행을 중단하는 언어의 프런트엔드는 checked 연산의 overflow 결과에 명시적인 `trap_if`를 사용해야 합니다. 기본 연산이 소스 언어의 overflow 정책을 암묵적으로 적용하지는 않습니다.
+
+### Wrap과 명시적 검사를 표현한 IR
+
+다음 모듈은 Rust builder로 구성해 검증기를 통과한 현재 프린터 출력입니다. 텍스트 파서와 실행 백엔드는 아직 제공되지 않습니다.
+
+```text
+module {
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  fn @add_u8() -> u8 {
+  entry:
+    %v0: u8 = const u8 255
+    %v1: u8 = const u8 1
+    %v2: u8 = add u8 %v0, %v1
+    ret u8 %v2
+  }
+
+  fn @require_no_overflow() -> u8 {
+  entry:
+    %v3: u8 = const u8 255
+    %v4: u8 = const u8 1
+    %v5: tuple<u8, bool> = uadd_chk u8 %v3, %v4
+    %v6: u8 = extract %v5, 0
+    %v7: bool = extract %v5, 1
+    trap_if bool %v7, reason="integer overflow"
+    ret u8 %v6
+  }
+
+}
+```
+
+산술 계약에 따르면 `add_u8`은 256을 8비트로 wrap한 0을 반환합니다. `require_no_overflow`는 감긴 결과(`extract ..., 0`)와 Bool overflow 플래그(`extract ..., 1`)를 분리합니다. 플래그가 참이면 명시적인 `trap_if`가 반환 전에 실행을 중단합니다. 이는 정의된 실행 결과이며, 구현된 인터프리터에서 얻은 실행 결과는 아닙니다.
 
 ## 나눗셈과 나머지
 

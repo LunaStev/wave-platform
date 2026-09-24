@@ -44,6 +44,36 @@ return·break·continue 뒤의 문장도 연결되지 않은 블록에 남습니
 
 이 보존 규칙으로 원래 프로그램 구조를 조사할 수 있습니다. terminator 뒤의 문장이 실제로 실행된다는 뜻은 아닙니다.
 
+## 보존되는 IR 예제
+
+다음은 검증기를 통과한 모듈의 현재 프린터 출력입니다. 사용하지 않는 계산, 컴파일 시점 선언, 연결되지 않은 블록을 함께 보여 줍니다.
+
+```text
+module {
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  fn @preserved() -> void {
+  entry:
+    %v0: i32 = const i32 1
+    %v1: i32 = const i32 2
+    %v2: i32 = add i32 %v0, %v1
+    %v3: i32 = const_decl "count" add(i32 1, i32 2) => const i32 3
+    ret void
+  unreachable.cont:
+    %v4: i32 = const i32 4
+    %v5: i32 = const i32 5
+    %v6: i32 = add i32 %v4, %v5
+    ret void
+  }
+
+}
+```
+
+`%v2`는 사용처가 없어도 `add`로 남습니다. `%v3`는 별도의 `const_decl`이며, `add(i32 1, i32 2)` 식과 평가 결과 3을 함께 보존합니다. `unreachable.cont`에는 들어오는 간선이 없으므로 `ret void` 뒤에 실행 경로를 추가하지 않으면서 `%v6` 덧셈을 확인할 수 있습니다.
+
+검증은 이 명령과 블록을 보존합니다. 이 예제는 IR 구성·검증·출력을 보여 주며 native 실행이나 DWARF 출력이 제공된다는 뜻은 아닙니다.
+
 ## 소스와 스택 정보
 
 디버그 인터페이스는 DWARF 5의 함수 정보, 소스 행, 기본 지역변수, 호출 프레임 정보를 사용합니다. 하위 표현으로 변환하더라도 함수·지역변수 정보와 원본 IR 식별자의 대응을 유지해야 합니다.

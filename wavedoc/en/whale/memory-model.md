@@ -27,6 +27,29 @@ A memory copy propagates initialization state along with the bytes. Copying unin
 
 Physical zeros in BSS do not, on their own, establish that an IR variable has been initialized.
 
+### Initialized scalar storage in IR
+
+The following builder-produced module passes verification. Its `store` precedes the value read, and all three memory instructions specify a nonzero power-of-two alignment.
+
+```text
+module {
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  fn @initialized_local() -> i32 {
+  entry:
+    %v0: ptr<i32> = alloca i32, align 4
+    %v1: i32 = const i32 42
+    store i32 %v1, ptr<i32> %v0, align 4
+    %v2: i32 = load i32, ptr<i32> %v0, align 4
+    ret i32 %v2
+  }
+
+}
+```
+
+`alloca` creates an i32 slot; `store` writes 42, and `load` defines the returned value. This is typed IR printer output, not a native execution transcript. Changing an alignment to 3 is a verification error. Removing the store would require an uninitialized-read trap under this model; initialization tracking and enforcement of that runtime trap are not yet available. Do not use acceptance by today's verifier as evidence that such a read is safe.
+
 ## Pointer arithmetic and comparison
 
 Address-calculation overflow traps. A pointer one element past an allocation may be formed, but it must not be used to access memory.

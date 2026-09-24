@@ -15,6 +15,106 @@ Whale 어셈블러는 AMD64 명령을 기계어 바이트와 재배치 정보로
 
 재배치 가능한 오브젝트에는 최종 주소를 아직 모르는 참조가 있을 수 있습니다. 이 주소를 해결하는 과정이 링크입니다. 어셈블이 성공했다고 모든 외부 심볼을 해결했거나 실행 파일을 만들었다고 판단해서는 안 됩니다.
 
+## 함수 어셈블하기
+
+다음 코드를 `answer.asm`으로 저장합니다.
+
+```asm
+section .text
+global answer
+
+answer:
+    mov eax, 42
+    ret
+```
+
+```sh
+whale asm --amd64 answer.asm -o answer.o
+```
+
+`.text` 내용은 `b8 2a 00 00 00 c3`이며, `mov eax, 42` 다음에 `ret`이 옵니다. ELF64 오브젝트는 `answer`를 공개합니다. 프로세스 시작 코드가 없는 호출 가능한 함수이며 실행 파일은 아닙니다. 이 예제의 명령은 현재 어셈블러에서 처리할 수 있습니다.
+
+## Rust API로 오브젝트 구성하기
+
+다음은 `object` 크레이트로 같은 함수 바이트를 기록하는 완전한 예제입니다. 출력 타깃과 전역 심볼을 명시합니다.
+
+```rust
+use object::{ObjectFile, ObjectSymbol, SectionKind, SymbolBinding, SymbolVisibility, Target};
+
+fn main() {
+    let mut object = ObjectFile::with_target(Target::X86_64WhaleLinux.object_target());
+    let text = object.add_section(".text", SectionKind::Text, 16);
+    object.sections[text].data = vec![0xb8, 0x2a, 0x00, 0x00, 0x00, 0xc3];
+    object.symbols.push(ObjectSymbol {
+        name: "answer".into(),
+        section_index: Some(text),
+        value: 0,
+        size: 6,
+        binding: SymbolBinding::Global,
+        visibility: SymbolVisibility::Default,
+    });
+    let elf = object.write().unwrap();
+    assert_eq!(&elf[..7], b"\x7fELF\x02\x01\x01");
+    assert_eq!(u16::from_le_bytes([elf[18], elf[19]]), 62);
+    std::fs::write("answer.o", elf).unwrap();
+}
+```
+
+Assertion은 ELF 클래스, 바이트 순서, machine 식별자를 확인합니다. `value: 0`은 `.text` 내부 offset이며 `size: 6`은 심볼의 바이트 크기입니다. 잘못된 섹션 참조나 범위는 직렬화 오류입니다. 다른 machine이나 바이트 순서도 AMD64로 표시하지 않고 거부합니다.
+
+## 두 오브젝트의 심볼 해석하기
+
+현재 `linker` 크레이트는 심볼 해석을 제공합니다. 다음 실행 가능한 예제는 두 오브젝트에 각각 로컬 `helper`를 정의한 뒤, 같은 이름을 두 번 공개하면 오류가 나는지 확인합니다.
+
+```rust
+use linker::core::symbol_table::{SymbolKey, SymbolTable};
+use object::{
+    ObjectFile, ObjectFormat, ObjectSymbol, SectionKind, SymbolBinding, SymbolVisibility,
+};
+
+fn input(binding: SymbolBinding) -> ObjectFile {
+    let mut object = ObjectFile::new(ObjectFormat::ELF64);
+    let text = object.add_section(".text", SectionKind::Text, 1);
+    object.sections[text].data = vec![0xc3];
+    object.symbols.push(ObjectSymbol {
+        name: "helper".into(),
+        section_index: Some(text),
+        value: 0,
+        size: 1,
+        binding,
+        visibility: SymbolVisibility::Default,
+    });
+    object
+}
+
+fn main() {
+    let mut symbols = SymbolTable::new();
+    symbols
+        .resolve(&[input(SymbolBinding::Local), input(SymbolBinding::Local)])
+        .unwrap();
+    for object_index in 0..2 {
+        let key = SymbolKey::Local {
+            object_index,
+            name: "helper".into(),
+        };
+        assert_eq!(symbols.symbols[&key].object_index, Some(object_index));
+    }
+    let error = symbols
+        .resolve(&[input(SymbolBinding::Global), input(SymbolBinding::Global)])
+        .unwrap_err();
+    assert_eq!(error, "Duplicate global symbol: helper");
+    println!("{error}");
+}
+```
+
+출력:
+
+```text
+Duplicate global symbol: helper
+```
+
+두 로컬 정의는 `object_index`가 다른 별도 키를 갖습니다. 두 전역 정의는 충돌합니다. 이 예제는 메모리에 구성한 오브젝트의 심볼을 직접 해석합니다. `.o` 파일 읽기, 재배치 적용, 실행 파일 출력은 수행하지 않습니다. 아래에서 설명하는 전체 정의 선택 정책 중 weak 우선순위 등은 아직 구현되지 않았습니다.
+
 ## 리터럴과 메모리 피연산자
 
 리터럴은 실제 명령의 인코딩 범위를 검사할 때까지 폭과 부호를 보존합니다. 범위에 들어가지 않는 값은 조용히 잘리지 않고 오류가 되어야 합니다.

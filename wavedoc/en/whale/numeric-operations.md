@@ -13,7 +13,7 @@ summary: Integer wrapping, checked arithmetic, shifts, conversion errors, and fl
 
 An N-bit integer has N value bits. Unsigned integers range from 0 to 2^N − 1; signed integers range from −2^(N−1) to 2^(N−1) − 1. The signedness of an operation determines how the bit pattern is interpreted.
 
-The examples below describe operation results; they are not textual IR syntax.
+The tables below describe operation results. The IR code example shows the current printer representation.
 
 ## Addition, subtraction, and multiplication
 
@@ -27,6 +27,39 @@ Basic integer add, sub, and mul keep the low N bits of the result. Overflow does
 | i8: 12 × 3 | 36 | false |
 
 A frontend that requires overflow to terminate execution must use checked arithmetic and an explicit `trap_if` on the overflow result. Basic arithmetic does not inherit the source language's overflow policy implicitly.
+
+### Wrapping and explicitly checked IR
+
+This module was constructed with the Rust builder and accepted by the verifier. It is current printer output; a text parser and execution backend are not yet available.
+
+```text
+module {
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  fn @add_u8() -> u8 {
+  entry:
+    %v0: u8 = const u8 255
+    %v1: u8 = const u8 1
+    %v2: u8 = add u8 %v0, %v1
+    ret u8 %v2
+  }
+
+  fn @require_no_overflow() -> u8 {
+  entry:
+    %v3: u8 = const u8 255
+    %v4: u8 = const u8 1
+    %v5: tuple<u8, bool> = uadd_chk u8 %v3, %v4
+    %v6: u8 = extract %v5, 0
+    %v7: bool = extract %v5, 1
+    trap_if bool %v7, reason="integer overflow"
+    ret u8 %v6
+  }
+
+}
+```
+
+Under the arithmetic contract, `add_u8` returns 0 because 256 wraps to eight bits. `require_no_overflow` separates the wrapped result (`extract ..., 0`) from the Bool overflow flag (`extract ..., 1`). Its explicit `trap_if` stops execution before the return when that flag is true. These are specified execution results, not results from an implemented interpreter.
 
 ## Division and remainder
 

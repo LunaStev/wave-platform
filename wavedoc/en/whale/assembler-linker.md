@@ -15,6 +15,106 @@ Whale's assembler converts AMD64 instructions into machine bytes and relocation 
 
 A relocatable object may contain references whose final addresses are not known. Resolving those addresses is a linking operation. Do not treat successful assembly as evidence that all external symbols can be resolved or that the output is executable.
 
+## Assemble a function
+
+Save this as `answer.asm`:
+
+```asm
+section .text
+global answer
+
+answer:
+    mov eax, 42
+    ret
+```
+
+```sh
+whale asm --amd64 answer.asm -o answer.o
+```
+
+The `.text` payload is `b8 2a 00 00 00 c3`: `mov eax, 42` followed by `ret`. The ELF64 object exports `answer`. It is a callable function without process startup code, not an executable. This example uses instructions accepted by the current assembler.
+
+## Construct an object with the Rust API
+
+This complete example uses the `object` crate to write the same function bytes with an explicit output target and global symbol:
+
+```rust
+use object::{ObjectFile, ObjectSymbol, SectionKind, SymbolBinding, SymbolVisibility, Target};
+
+fn main() {
+    let mut object = ObjectFile::with_target(Target::X86_64WhaleLinux.object_target());
+    let text = object.add_section(".text", SectionKind::Text, 16);
+    object.sections[text].data = vec![0xb8, 0x2a, 0x00, 0x00, 0x00, 0xc3];
+    object.symbols.push(ObjectSymbol {
+        name: "answer".into(),
+        section_index: Some(text),
+        value: 0,
+        size: 6,
+        binding: SymbolBinding::Global,
+        visibility: SymbolVisibility::Default,
+    });
+    let elf = object.write().unwrap();
+    assert_eq!(&elf[..7], b"\x7fELF\x02\x01\x01");
+    assert_eq!(u16::from_le_bytes([elf[18], elf[19]]), 62);
+    std::fs::write("answer.o", elf).unwrap();
+}
+```
+
+The assertions inspect ELF class, byte order, and machine identity. `value: 0` is an offset within `.text`, and `size: 6` is the symbol's byte extent. An invalid section reference or extent fails serialization. A different machine or byte order also fails rather than being labeled as AMD64.
+
+## Resolve symbols from two objects
+
+The `linker` crate currently exposes symbol resolution. The following executable example gives two objects a local `helper`, then checks that exporting the same name twice produces an error:
+
+```rust
+use linker::core::symbol_table::{SymbolKey, SymbolTable};
+use object::{
+    ObjectFile, ObjectFormat, ObjectSymbol, SectionKind, SymbolBinding, SymbolVisibility,
+};
+
+fn input(binding: SymbolBinding) -> ObjectFile {
+    let mut object = ObjectFile::new(ObjectFormat::ELF64);
+    let text = object.add_section(".text", SectionKind::Text, 1);
+    object.sections[text].data = vec![0xc3];
+    object.symbols.push(ObjectSymbol {
+        name: "helper".into(),
+        section_index: Some(text),
+        value: 0,
+        size: 1,
+        binding,
+        visibility: SymbolVisibility::Default,
+    });
+    object
+}
+
+fn main() {
+    let mut symbols = SymbolTable::new();
+    symbols
+        .resolve(&[input(SymbolBinding::Local), input(SymbolBinding::Local)])
+        .unwrap();
+    for object_index in 0..2 {
+        let key = SymbolKey::Local {
+            object_index,
+            name: "helper".into(),
+        };
+        assert_eq!(symbols.symbols[&key].object_index, Some(object_index));
+    }
+    let error = symbols
+        .resolve(&[input(SymbolBinding::Global), input(SymbolBinding::Global)])
+        .unwrap_err();
+    assert_eq!(error, "Duplicate global symbol: helper");
+    println!("{error}");
+}
+```
+
+Output:
+
+```text
+Duplicate global symbol: helper
+```
+
+The two local definitions have separate keys through `object_index`. The two global definitions collide. This example resolves model objects directly; it does not read `.o` files, apply relocations, or emit an executable. The complete definition-selection policy described below, including weak precedence, is not yet implemented.
+
 ## Literals and memory operands
 
 Preserve a literal's width and signedness until the actual instruction encoding range is checked. A value that does not fit must produce an error instead of silent truncation.

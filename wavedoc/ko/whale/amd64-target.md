@@ -35,6 +35,26 @@ whale ir lower program.json --target x86_64-whale-linux
 
 출력 타깃은 빌드 호스트와 무관하게 64비트 little-endian 데이터 레이아웃을 제공합니다. 알 수 없는 식별자나 `aarch64-whale-linux`, `x86_64-whale-windows` 같은 미지원 조합은 입력을 읽거나 출력 파일을 교체하기 전에 지원 타깃을 안내하는 오류로 실패합니다. `--no-verify`로도 타깃 선택 검사를 끌 수 없습니다.
 
+빈 AST(`{"globals":[],"functions":[]}`)를 입력하면 다음 헤더와 모듈을 출력합니다.
+
+```text
+module {
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+}
+```
+
+미지원 타깃을 지정하면 실패 상태로 종료합니다.
+
+```sh
+whale ir lower program.json --target banana
+```
+
+```text
+Error: unsupported target "banana"; supported targets: x86_64-whale-linux
+```
+
 Rust에서는 `ir::Target::lookup("x86_64-whale-linux")`로 타깃을 선택하고, 그 `name()`과 `data_layout()`을 `lower_o0`에 전달할 수 있습니다. Lowering은 전달된 레이아웃이 선택한 타깃과 다르면 거부합니다. 직접 구성한 IR도 `verify_module`에서 미지원 타깃 이름과 레이아웃 불일치를 검사합니다.
 
 오브젝트 모델은 `ObjectTarget`에 `format`, `machine`, `endian`, `address_bits`를 저장합니다. `ObjectFile::with_target`은 명시한 식별 정보를 보존하며, 직렬화는 AMD64·little-endian·64비트 ELF64 조합만 허용합니다. 다른 아키텍처의 machine 식별자가 있다는 사실은 해당 인코더의 지원을 뜻하지 않습니다. 두 ELF writer 진입점 모두 메타데이터를 검사하며, 링커 입력은 심볼 해석이나 링크 전에 검사합니다. 지원되는 오브젝트의 ELF 헤더는 `EM_X86_64`를 유지합니다.
