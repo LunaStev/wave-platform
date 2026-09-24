@@ -33,9 +33,9 @@ These references specify Whale semantics. Feature availability is listed below; 
 | Component | Available interface | Limitations |
 | --- | --- | --- |
 | Assembler | AMD64 assembly to ELF64 relocatable objects | Instruction and directive coverage is incomplete |
-| Object library | Object construction and ELF64 serialization | A relocatable object is not an executable |
-| IR | Construction, printing, verification, and scalar AST lowering | Experimental API; strict versioned interchange and text parsing are incomplete |
-| Linker | Symbol resolution infrastructure | Complete relocation application and executable output are unavailable |
+| Object library | Object construction, target validation, and AMD64 ELF64 serialization | A relocatable object is not an executable |
+| IR | Construction, printing, verification, and scalar AST lowering with validated target/layout selection | Experimental API; strict versioned interchange and text parsing are incomplete |
+| Linker | Symbol resolution infrastructure and input target validation | Complete relocation application and executable output are unavailable |
 | Execution and debugging | Semantic requirements described in this manual | IR interpretation, end-to-end native code generation, tracked-memory runtime checks, and DWARF emission are not yet available |
 
 The no-undefined-behavior rules apply to verified IR and tracked memory. The experimental implementation does not yet provide the complete runtime enforcement described by the memory and execution references.

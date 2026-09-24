@@ -25,6 +25,24 @@ The native profile uses the target identifier `x86_64-whale-linux`.
 
 A build host and an output target are different concepts. Running Whale on another host does not imply support for that host's instruction set or object format. See [feature availability](overview) for the implemented compilation paths.
 
+## Selecting and validating a target
+
+The experimental `ir lower` command accepts `x86_64-whale-linux` as its default and only supported target. Build with `--features socket-cli` to use the command:
+
+```sh
+whale ir lower program.json --target x86_64-whale-linux
+```
+
+The target supplies a 64-bit, little-endian data layout independently of the build host. An unknown identifier or unsupported combination, such as `aarch64-whale-linux` or `x86_64-whale-windows`, fails with the supported choice before reading the input or replacing an output file. `--no-verify` does not disable target selection checks.
+
+Rust clients can select `ir::Target::lookup("x86_64-whale-linux")` and pass its `name()` and `data_layout()` to `lower_o0`. Lowering rejects a supplied layout that disagrees with the selected target. `verify_module` also rejects unsupported target names and mismatched layouts in manually constructed IR.
+
+The object model stores `ObjectTarget` with `format`, `machine`, `endian`, and `address_bits`. `ObjectFile::with_target` retains explicit identity; serialization accepts only AMD64, little-endian, 64-bit ELF64. Machine identifiers for other architectures do not enable their encoders. Both ELF writer entry points validate metadata, and linker inputs are checked before symbol resolution or linking. The ELF header retains `EM_X86_64` for supported objects.
+
+`ObjectFile::new(ObjectFormat::ELF64)` remains a convenience constructor for that AMD64 identity. Code that previously accessed `object.format` must use `object.target.format`.
+
+These checks provide target selection and object identity. Aggregate size, field-offset, and stride queries, object-file reading, native ABI lowering, and executable linking remain unavailable. The scalar lowering path continues to assign explicit alignment; complete aggregate layout rules are described in the [memory reference](memory-model).
+
 ## Calls and signatures
 
 A supported call must have an explicit signature and calling convention. Unsupported signatures are errors; a backend must not approximate them by dropping arguments or substituting a different representation.
