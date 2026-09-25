@@ -128,7 +128,7 @@ AST와 typed IR은 각각의 format version과 공통 semantics version을 사�
 
 ### 버전이 명시된 AST JSON
 
-다음을 `program.json`으로 저장합니다. Envelope의 네 필드는 모두 필수입니다. `program`의 `globals`와 `functions` 배열도 필수이며 빈 배열을 허용합니다. 함수의 이름·매개변수·반환 타입·본문은 필수입니다. 각 enum은 unit 이름 또는 variant 키 하나를 가진 객체로 표현합니다. `VarDecl.init`은 생략하거나 null로 지정할 수 있으며 다른 필수 필드는 생략할 수 없습니다.
+다음을 `program.json`으로 저장합니다. Envelope의 네 필드는 모두 필수입니다. `program`의 `globals`와 `functions` 배열도 필수이며 빈 배열을 허용합니다. 함수의 이름·매개변수·반환 타입·본문은 필수입니다. 각 enum은 unit 이름 또는 variant 키 하나를 가진 객체로 표현합니다. Unit variant는 `{"Void":null}`처럼 null 값을 가진 객체도 허용하며, encoder는 unit 이름 `"Void"`로 출력합니다. `VarDecl.init`은 생략하거나 null로 지정할 수 있으며 다른 필수 필드는 생략할 수 없습니다.
 
 ```json
 {

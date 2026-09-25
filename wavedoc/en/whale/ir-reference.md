@@ -128,7 +128,7 @@ The scalar AST JSON contract below is available. Printed typed IR carries versio
 
 ### Versioned AST JSON
 
-Save the following as `program.json`. All four envelope fields are required. `program` contains required `globals` and `functions` arrays, which may be empty. Function name, parameters, return type and body are required. Each enum uses either its unit name or a single variant-key object. `VarDecl.init` may be absent or null; other required fields must be present.
+Save the following as `program.json`. All four envelope fields are required. `program` contains required `globals` and `functions` arrays, which may be empty. Function name, parameters, return type and body are required. Each enum uses either its unit name or a single variant-key object. Unit variants also accept a null-valued object, such as `{"Void":null}`; the encoder emits the unit name `"Void"`. `VarDecl.init` may be absent or null; other required fields must be present.
 
 ```json
 {
