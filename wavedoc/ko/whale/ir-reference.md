@@ -43,6 +43,8 @@ fn main() {
 
 ```text
 module {
+  format_version 1
+  semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
 
@@ -121,4 +123,91 @@ AST와 typed IR은 각각의 format version과 공통 semantics version을 사�
 
 정수는 비트 폭·signedness·문자열 숫자로 전달합니다. 부동소수점 상수는 폭과 정확한 비트열로 전달합니다. 텍스트 IR의 round-trip은 이름·ID·타입·상수·순서·속성·메타데이터를 보존해야 합니다. 공백과 주석 배치는 보존 대상이 아닙니다.
 
-이 절은 교환 형식의 요구 사항이며 JSON 스키마나 완전한 텍스트 문법은 아닙니다. 파서와 직렬화기를 선택하기 전에 [지원 현황](overview)을 확인하세요.
+아래 스칼라 AST JSON 계약을 사용할 수 있습니다. 출력되는 typed IR에는 버전 정보가 포함되지만 텍스트 파서와 완전한 왕복 교환은 아직 미지원입니다.
+
+
+### 버전이 명시된 AST JSON
+
+다음을 `program.json`으로 저장합니다. Envelope의 네 필드는 모두 필수입니다. `program`의 `globals`와 `functions` 배열도 필수이며 빈 배열을 허용합니다. 함수의 이름·매개변수·반환 타입·본문은 필수입니다. 각 enum은 unit 이름 또는 variant 키 하나를 가진 객체로 표현합니다. Unit variant는 `{"Void":null}`처럼 null 값을 가진 객체도 허용하며, encoder는 unit 이름 `"Void"`로 출력합니다. `VarDecl.init`은 생략하거나 null로 지정할 수 있으며 다른 필수 필드는 생략할 수 없습니다.
+
+```json
+{
+  "format_version": 1,
+  "semantics_version": 1,
+  "features": [],
+  "program": {
+    "globals": [],
+    "functions": [
+      {
+        "name": "answer",
+        "parameters": [],
+        "return_type": {
+          "Int": {
+            "bits": 128,
+            "signed": false
+          }
+        },
+        "body": [
+          {
+            "Return": {
+              "Lit": {
+                "Int": {
+                  "bits": 128,
+                  "signed": false,
+                  "value": "340282366920938463463374607431768211455"
+                }
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+```sh
+cargo run --locked --features socket-cli -- ir lower program.json
+```
+
+```text
+module {
+  format_version 1
+  semantics_version 1
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  fn @answer() -> u128 {
+  entry:
+    %v0: u128 = const u128 340282366920938463463374607431768211455
+    ret u128 %v0
+  }
+
+}
+```
+
+정수 `value`는 10진 문자열입니다. Signed 정수의 선택적인 마이너스 뒤에 숫자를 쓰며 공백·플러스·지수·구분자는 허용하지 않습니다. 허용 범위는 선언한 폭과 signedness로 결정합니다. 위의 `u128::MAX`는 JSON과 lowering을 거치면서 그대로 보존됩니다. 음수 unsigned 값이나 범위를 벗어난 값은 wrap하지 않고 오류입니다. Float 값에는 [수치 연산](numeric-operations)에서 설명하는 정확한 폭의 16진 비트 문자열을 사용합니다.
+
+이 AST의 `format_version`과 `semantics_version`은 각각 1입니다. `features`는 빈 배열이어야 합니다. 알 수 없는 필드·버전·기능, 중복된 원본 JSON 키(escape를 풀면 같은 키인 경우 포함), 뒤따르는 추가 값은 `--no-verify`에서도 오류입니다. 라이브러리 진입점은 `ir::lower_ast::interchange::decode`이며 `encode`는 envelope를 출력합니다. `decode`의 기본 원본 크기 한도는 8 MiB이고 `decode_with_limit`으로 한도를 지정합니다. JSON 중첩에도 한도가 있습니다. 먼저 일반 map으로 읽으면 중복 키가 사라질 수 있으므로 원본 decoder를 사용합니다.
+
+[전체 JSON Schema](https://github.com/wavefnd/Whale/blob/master/ir/schema/ast-v1.schema.json)는 형태·필수 필드·variant를 정의합니다. 범위·타입 검사와 중복 키 검사가 추가로 적용됩니다. 스칼라 lowering은 리터럴, 변수·상수, add/sub/mul, 비교, 대입, if/while, return과 break/continue를 지원합니다. 호출·복합 값 표현식은 미지원입니다. `Opaque`는 스키마에서 표현할 수 있지만 lowering에서 거부합니다.
+
+기존의 bare Program에는 envelope를 추가하고 JSON 숫자 리터럴을 정수의 10진 문자열 또는 float 비트 문자열로 바꿔야 합니다. 무버전 입력은 거부합니다. AST와 typed IR의 버전 번호는 지금 둘 다 1이어도 독립적으로 관리됩니다.
+
+### 거부되는 입력과 CLI 복구
+
+다음 완전한 입력을 `invalid.json`으로 저장합니다.
+
+```json
+{"format_version":99,"semantics_version":1,"features":[],"program":{"globals":[],"functions":[]}}
+```
+
+```sh
+cargo run --locked --features socket-cli -- ir lower invalid.json -o rejected.wir
+```
+
+```text
+Failed to parse socket JSON: unsupported AST format_version 99; expected 1
+```
+
+명령은 0이 아닌 상태로 종료하며 새 출력을 만들거나 기존 파일을 덮어쓰지 않습니다. 타입 불일치도 출력 게시 전에 실패합니다. `socket-cli` 없이 빌드한 바이너리는 상태 2로 종료하고 `--features socket-cli`가 포함된 복구 명령을 출력합니다.

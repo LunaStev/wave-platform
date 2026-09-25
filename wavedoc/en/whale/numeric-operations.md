@@ -34,6 +34,8 @@ This module was constructed with the Rust builder and accepted by the verifier. 
 
 ```text
 module {
+  format_version 1
+  semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
 
@@ -105,3 +107,32 @@ Default arithmetic does not permit fast math, implicit fused multiply-add, or fl
 Numerical operations may produce NaN or infinity. NaNs produced by numerical operations or width conversions are normalized to one fixed positive quiet NaN per width. Storage and copying instead preserve the original NaN bits. This distinction matters when moving a NaN payload through memory without performing arithmetic on it.
 
 Floating-point status flags are not exposed. Float-to-integer conversion has the trapping rules above even though default floating-point arithmetic permits NaN and infinity results.
+
+
+### Exact constant storage
+
+Use `FloatBits` variants or parse an exact-width hexadecimal bit string. Storage equality compares bits, including signed zero and NaN payloads. The verifier rejects a payload width that differs from its IR type.
+
+```rust
+use ir::{FloatBits, ModuleBuilder, Target, Type};
+fn main() {
+    let bits = FloatBits::parse(32, "0xffc01234").unwrap();
+    assert_eq!(bits, FloatBits::F32(0xffc01234));
+    let target = Target::X86_64WhaleLinux;
+    let mut module = ModuleBuilder::new(target.name(), target.data_layout());
+    let mut function = module.begin_function("payload", vec![], Type::F32);
+    let value = function.const_float_bits(Type::F32, bits);
+    function.ret(Some(value));
+    function.finish();
+    let module = module.finish();
+    ir::verify_module(&module).unwrap();
+    assert!(ir::print_module(&module).contains("const f32 0xffc01234"));
+    println!("{}", bits);
+}
+```
+
+```text
+0xffc01234
+```
+
+f16/f32/f64 strings have exactly 4/8/16 hex digits after `0x`. `0x80000000` is f32 negative zero; `0x7f800000` is positive infinity. `const_float` is a numeric convenience conversion from host f64; use `const_float_bits` to preserve original storage. Bit-exact storage does not complete the floating arithmetic backend: compile-time arithmetic still uses host f64 intermediates, so the complete declared-width rounding contract remains unfinished.

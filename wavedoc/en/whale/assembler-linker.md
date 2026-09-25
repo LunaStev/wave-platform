@@ -217,3 +217,41 @@ The static native profile produces ELF ET_EXEC with an explicitly supplied entry
 The profile does not automatically remove sections, fold identical code, or strip symbols. File layout must account separately for bytes stored in the file and memory reserved at runtime.
 
 The complete static executable path is not yet available in the CLI. `whale asm` produces a relocatable object; `whale object` wraps raw bytes in an object. See the [toolchain overview](overview) for availability and the [AMD64 target](amd64-target) for ABI requirements.
+
+
+## Optional Wave record serializer
+
+A Linux x86_64 build of Whale can use a Wave implementation for fixed ELF64 header, section, symbol and RELA records. The default Rust implementation remains available. Output target selection, object validation, layout, symbol resolution and buffer allocation stay in Rust; selecting Wave does not add an architecture or a complete linker.
+
+Build the optional path from the Whale repository with Rust, LLVM 21 development libraries, a C linker and `ar` installed:
+
+```sh
+git clone https://github.com/wavefnd/Wave.git /tmp/whale-wave-bootstrap
+git -C /tmp/whale-wave-bootstrap checkout --detach 8a465e30aeea4b817d925cdd0e8d08c1bb029c9a
+python3 tools/build_wave_elf.py --wave-source /tmp/whale-wave-bootstrap --out-dir /tmp/whale-wave-elf
+WHALE_WAVE_ELF_DIR=/tmp/whale-wave-elf cargo build --locked --all-features
+WHALE_WAVE_ELF_DIR=/tmp/whale-wave-elf cargo test --locked --workspace --all-features
+```
+
+The script verifies the pinned revision and rejects tracked modifications, rebuilds the Wave compiler, emits the Wave object through LLVM, and archives it for static linking. `WHALE_WAVE_ELF_DIR` must contain that archive; a requested but invalid archive or unsupported host fails the build. Without the variable, ordinary builds including `--all-features` require no Wave compiler. The linked Whale executable needs no Wave compiler at runtime. Cross-compiling Whale through this bootstrap is not supported yet.
+
+For example, assemble this as `return.asm` with the resulting binary:
+
+```asm
+section .text
+global entry
+entry:
+    ret
+```
+
+```sh
+target/debug/whale asm --amd64 return.asm -o return.o
+```
+
+```text
+ELF class: ELF64
+machine: AMD64 (62)
+.text bytes: c3
+```
+
+The record ABI passes a kind, pointer to u64 fields, field count, output pointer and capacity. Buffers belong to the Rust caller. No allocation ownership or Rust enum/String/Vec representation crosses the boundary. The Wave routine validates count, capacity and field widths before writing; it returns status 0 on success, 1 for invalid shape/pointers/capacity and 2 for field overflow. Pointers must designate live, correctly sized, non-overlapping buffers; raw C pointers cannot prove those conditions. The wrapper supplies these invariants. Tests compare complete ELF files against the Rust path, including BSS and signed relocation addends. This is a partial Wave implementation with a Wave/LLVM bootstrap, not complete self-hosting.

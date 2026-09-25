@@ -50,6 +50,8 @@ The following module passes verification and shows the current printer represent
 
 ```text
 module {
+  format_version 1
+  semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
 

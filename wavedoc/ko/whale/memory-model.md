@@ -33,6 +33,8 @@ BSS의 물리적인 바이트가 0이라는 사실만으로 IR 변수의 초기�
 
 ```text
 module {
+  format_version 1
+  semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
 

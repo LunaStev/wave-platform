@@ -217,3 +217,41 @@ ELF writer는 overflow와 필드 폭을 줄일 때의 잘림을 거부합니다.
 섹션 제거, 동일 코드 합치기, 심볼 제거를 자동으로 수행하지 않습니다. 파일 배치는 실제로 저장하는 바이트와 실행 시 예약하는 메모리를 별도로 계산해야 합니다.
 
 CLI의 완전한 정적 실행 파일 생성 경로는 아직 제공되지 않습니다. `whale asm`은 재배치 가능한 오브젝트를 만들고, `whale object`는 원시 바이트를 오브젝트로 감쌉니다. 제공 여부는 [툴체인 개요](overview), ABI 요구 사항은 [AMD64 타깃](amd64-target)을 참고하세요.
+
+
+## 선택 가능한 Wave 레코드 직렬화
+
+Linux x86_64용 Whale 빌드는 고정 ELF64 헤더·섹션·심볼·RELA 레코드에 Wave 구현을 사용할 수 있습니다. 기본 Rust 구현도 제공됩니다. 출력 타깃 선택, 오브젝트 검증, 배치, 심볼 해석과 버퍼 할당은 Rust에서 담당합니다. Wave를 선택한다고 지원 아키텍처나 완전한 링커가 추가되는 것은 아닙니다.
+
+Rust, LLVM 21 개발 라이브러리, C 링커와 `ar`를 설치한 뒤 Whale 저장소에서 선택 경로를 빌드합니다.
+
+```sh
+git clone https://github.com/wavefnd/Wave.git /tmp/whale-wave-bootstrap
+git -C /tmp/whale-wave-bootstrap checkout --detach 8a465e30aeea4b817d925cdd0e8d08c1bb029c9a
+python3 tools/build_wave_elf.py --wave-source /tmp/whale-wave-bootstrap --out-dir /tmp/whale-wave-elf
+WHALE_WAVE_ELF_DIR=/tmp/whale-wave-elf cargo build --locked --all-features
+WHALE_WAVE_ELF_DIR=/tmp/whale-wave-elf cargo test --locked --workspace --all-features
+```
+
+스크립트는 고정 revision을 확인하고 tracked 변경을 거부하며, Wave 컴파일러를 빌드한 뒤 LLVM으로 Wave 오브젝트를 생성하고 정적 링크용 archive로 묶습니다. `WHALE_WAVE_ELF_DIR`에는 이 archive가 있어야 합니다. 잘못된 archive나 미지원 호스트로 명시적으로 요청하면 빌드 오류입니다. 변수를 지정하지 않은 일반 빌드에는 `--all-features`에서도 Wave 컴파일러가 필요 없습니다. 링크된 Whale 실행 파일의 실행 시점에도 Wave 컴파일러가 필요 없습니다. 이 bootstrap으로 Whale 자체를 크로스 컴파일하는 경로는 아직 미지원입니다.
+
+예를 들어 다음을 `return.asm`으로 저장하고 생성된 바이너리로 어셈블합니다.
+
+```asm
+section .text
+global entry
+entry:
+    ret
+```
+
+```sh
+target/debug/whale asm --amd64 return.asm -o return.o
+```
+
+```text
+ELF class: ELF64
+machine: AMD64 (62)
+.text bytes: c3
+```
+
+레코드 ABI는 종류, u64 필드 포인터, 필드 수, 출력 포인터와 용량을 전달합니다. 버퍼는 Rust 호출자가 소유합니다. 할당 소유권이나 Rust enum/String/Vec 표현을 경계 너머로 전달하지 않습니다. Wave 루틴은 기록 전에 개수·용량·필드 폭을 검사합니다. 성공은 상태 0, 잘못된 형태·포인터·용량은 1, 필드 overflow는 2를 반환합니다. 포인터는 올바른 크기로 살아 있고 서로 겹치지 않는 버퍼를 가리켜야 합니다. 원시 C 포인터만으로 이 조건을 증명할 수는 없으며 wrapper가 조건을 만족시킵니다. 테스트는 BSS와 signed 재배치 addend까지 포함한 전체 ELF를 Rust 경로와 비교합니다. 이는 Wave/LLVM bootstrap을 사용하는 부분 Wave 구현이며 완전한 셀프호스팅은 아닙니다.
