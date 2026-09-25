@@ -34,6 +34,8 @@ overflow에서 실행을 중단하는 언어의 프런트엔드는 checked 연�
 
 ```text
 module {
+  format_version 1
+  semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
 
@@ -105,3 +107,32 @@ float→int는 0 방향으로 절삭한 뒤 정수 범위를 검사합니다. Na
 수치 연산의 결과는 NaN이나 무한대일 수 있습니다. 수치 연산과 폭 변경에서 나오는 NaN은 폭별로 하나의 고정된 양의 quiet NaN으로 정규화합니다. 저장과 복사는 원래 NaN 비트를 보존합니다. 따라서 NaN payload를 산술 연산 없이 메모리로 전달하는 경우와 계산하는 경우의 동작이 다릅니다.
 
 부동소수점 상태 플래그는 노출하지 않습니다. 기본 부동소수점 산술이 NaN·무한대 결과를 허용하더라도 float→int 변환에는 위의 trap 규칙을 적용합니다.
+
+
+### 정확한 상수 저장
+
+`FloatBits` variant 또는 정확한 폭의 16진 비트 문자열을 사용합니다. 저장 값의 동등성은 음수 0과 NaN payload를 포함한 비트열로 비교합니다. 검증기는 IR 타입과 payload의 폭이 다르면 거부합니다.
+
+```rust
+use ir::{FloatBits, ModuleBuilder, Target, Type};
+fn main() {
+    let bits = FloatBits::parse(32, "0xffc01234").unwrap();
+    assert_eq!(bits, FloatBits::F32(0xffc01234));
+    let target = Target::X86_64WhaleLinux;
+    let mut module = ModuleBuilder::new(target.name(), target.data_layout());
+    let mut function = module.begin_function("payload", vec![], Type::F32);
+    let value = function.const_float_bits(Type::F32, bits);
+    function.ret(Some(value));
+    function.finish();
+    let module = module.finish();
+    ir::verify_module(&module).unwrap();
+    assert!(ir::print_module(&module).contains("const f32 0xffc01234"));
+    println!("{}", bits);
+}
+```
+
+```text
+0xffc01234
+```
+
+f16/f32/f64 문자열은 `0x` 뒤에 정확히 4/8/16개의 16진 숫자를 사용합니다. `0x80000000`은 f32 음수 0이고 `0x7f800000`은 양의 무한대입니다. `const_float`은 host f64에서 수치 변환하는 편의 API이며 원본 비트 보존에는 `const_float_bits`를 사용합니다. 정확한 저장 표현이 float 연산 백엔드의 완성을 의미하지는 않습니다. 컴파일 시점 산술은 여전히 host f64 중간값을 사용하므로 선언된 폭의 전체 반올림 계약은 미완성입니다.

@@ -43,6 +43,8 @@ The printer produces:
 
 ```text
 module {
+  format_version 1
+  semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
 
@@ -121,4 +123,91 @@ AST and typed IR use separate format versions and a common semantics version. Re
 
 Integers carry a bit width, signedness, and a textual numeric value. Floating-point constants carry a width and an exact bit pattern. A text IR round trip must preserve names, IDs, types, constants, ordering, attributes, and metadata. Whitespace and comment placement need not survive the round trip.
 
-These are interchange requirements, not a JSON schema or a complete textual grammar. Consult [feature availability](overview) before selecting a parser or serializer.
+The scalar AST JSON contract below is available. Printed typed IR carries version metadata, but its parser and full round-trip interchange remain unavailable.
+
+
+### Versioned AST JSON
+
+Save the following as `program.json`. All four envelope fields are required. `program` contains required `globals` and `functions` arrays, which may be empty. Function name, parameters, return type and body are required. Each enum uses either its unit name or a single variant-key object. `VarDecl.init` may be absent or null; other required fields must be present.
+
+```json
+{
+  "format_version": 1,
+  "semantics_version": 1,
+  "features": [],
+  "program": {
+    "globals": [],
+    "functions": [
+      {
+        "name": "answer",
+        "parameters": [],
+        "return_type": {
+          "Int": {
+            "bits": 128,
+            "signed": false
+          }
+        },
+        "body": [
+          {
+            "Return": {
+              "Lit": {
+                "Int": {
+                  "bits": 128,
+                  "signed": false,
+                  "value": "340282366920938463463374607431768211455"
+                }
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+```sh
+cargo run --locked --features socket-cli -- ir lower program.json
+```
+
+```text
+module {
+  format_version 1
+  semantics_version 1
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  fn @answer() -> u128 {
+  entry:
+    %v0: u128 = const u128 340282366920938463463374607431768211455
+    ret u128 %v0
+  }
+
+}
+```
+
+Integer `value` is a decimal string: optional minus for signed integers, followed by decimal digits, without whitespace, plus, exponent or separators. The declared width/signedness determines the accepted range. `u128::MAX` above survives JSON and lowering exactly. A negative unsigned value or an out-of-range value fails instead of wrapping. Floating values use exact-width hexadecimal storage strings, described in [numeric operations](numeric-operations).
+
+`format_version` is 1 for this AST format; `semantics_version` is 1. `features` must be an empty array. Unknown fields, versions, features, duplicate raw JSON keys (including escaped equivalent keys), and trailing values are errors, even with `--no-verify`. The library entry point is `ir::lower_ast::interchange::decode`; `encode` emits the envelope. `decode` defaults to an 8 MiB source-byte limit; `decode_with_limit` accepts a caller limit. JSON nesting is bounded. Use this raw decoder rather than parsing into a generic map that could already discard duplicate keys.
+
+[The complete JSON Schema](https://github.com/wavefnd/Whale/blob/master/ir/schema/ast-v1.schema.json) specifies shapes, required fields and variants. Range/type checks and duplicate-key detection additionally apply. The scalar lowering subset includes literals, variables/constants, add/sub/mul, comparisons, assignment, if/while, return and break/continue. Call and aggregate expressions are unsupported. `Opaque` is representable in the schema but unsupported by lowering.
+
+Migration requires wrapping old bare Program payloads and replacing numeric JSON literals with decimal integer strings or float bit strings. Old unversioned payloads are rejected. AST and typed IR version numbers are independent even when both currently equal 1.
+
+### Rejected input and CLI recovery
+
+Save this complete input as `invalid.json`:
+
+```json
+{"format_version":99,"semantics_version":1,"features":[],"program":{"globals":[],"functions":[]}}
+```
+
+```sh
+cargo run --locked --features socket-cli -- ir lower invalid.json -o rejected.wir
+```
+
+```text
+Failed to parse socket JSON: unsupported AST format_version 99; expected 1
+```
+
+The command exits nonzero without creating an output or replacing an existing file. A type mismatch also fails before output publication. A binary built without `socket-cli` exits with status 2 and prints a recovery command containing `--features socket-cli`.

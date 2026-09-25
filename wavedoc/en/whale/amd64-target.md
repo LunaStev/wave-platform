@@ -39,6 +39,8 @@ For an empty AST (`{"globals":[],"functions":[]}`), the command prints the follo
 
 ```text
 module {
+  format_version 1
+  semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
 
