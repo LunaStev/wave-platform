@@ -52,6 +52,12 @@ make run
 
 The development server listens on <http://127.0.0.1:8080>. Run `make frontend-dev` in another terminal when Vite hot reload is needed.
 
+## Android development
+
+The native Kotlin and Jetpack Compose app lives in [`android/`](android/README.md).
+Its contributor guide covers the pinned toolchain, local server connection, debug
+installation, and tests.
+
 ## Operations
 
 `restart.sh` pulls the current branch with fast-forward only, rebuilds the images, and recreates changed containers:
