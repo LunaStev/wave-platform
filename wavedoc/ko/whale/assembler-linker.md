@@ -133,6 +133,63 @@ AMD64에서 심볼 하나로 이루어진 메모리 피연산자는 기본적으
 
 파일 크기와 메모리 크기는 구별됩니다. BSS는 메모리를 예약하지만 같은 크기의 0 바이트를 오브젝트 파일에 저장할 필요는 없습니다. 사용자 정의 섹션은 속성을 가지며 심볼은 바인딩과 타입 정보를 유지합니다.
 
+### Payload 할당 없이 BSS 예약하기
+
+다음을 `buffer.asm`으로 저장합니다. 논리 BSS 1 TiB를 예약하지만 어셈블 중에 1 TiB를 할당하거나 기록하지 않습니다.
+
+```asm
+section .bss
+global buffer
+buffer:
+    resb 1099511627776
+buffer_end:
+
+section .text
+    ret
+```
+
+```sh
+whale asm --amd64 buffer.asm -o buffer.o
+```
+
+`buffer`의 섹션 내부 값은 0이며 `buffer_end`의 값은 1099511627776입니다. `.bss` 헤더는 그 크기를 가진 `SHT_NOBITS`이며 파일 payload가 없습니다. 이후 `.bss`로 돌아오면 논리 offset을 이어서 사용합니다. 0으로 된 데이터 지시어도 논리 크기를 늘립니다. 0이 아닌 초기값, BSS 안에 적용할 재배치, BSS 안의 명령은 거부합니다.
+
+오브젝트와 링커 API에서도 같은 구분을 사용할 수 있습니다.
+
+```rust
+use linker::core::layout::Layout;
+use object::{ObjectFile, ObjectFormat, SectionKind};
+
+fn main() {
+    let mut object = ObjectFile::new(ObjectFormat::ELF64);
+    let text = object.add_section(".text", SectionKind::Text, 16);
+    object.sections[text].data = vec![0xc3];
+    let bss = object.add_section(".bss", SectionKind::Bss, 16);
+    object.sections[bss].zero_fill = 1 << 40;
+    assert!(object.sections[bss].data.is_empty());
+
+    let elf = object.write_with_limit(4096).unwrap();
+    assert!(elf.len() < 4096);
+    let layout = Layout::compute(&[object], 0x1000).unwrap();
+    assert_eq!(layout.file_size, 1);
+    assert_eq!(layout.memory_size, (1 << 40) + 16);
+    assert_eq!(layout.sections[bss].memory_address, 0x1010);
+    assert_eq!(layout.sections[bss].file_size, 0);
+}
+```
+
+```text
+section  memory address  file bytes       memory bytes
+.text    0x1000          1                1
+.bss     0x1010          0                1099511627776
+```
+
+`Section::zero_fill`은 파일에 저장하지 않는 추가 BSS 바이트 수입니다. 검사된 메모리 크기는 `data.len() + zero_fill`입니다. 기존의 0으로 채운 BSS `data`도 허용하지만, 빈 `data` 벡터로 그 할당을 피할 수 있습니다. BSS가 아닌 섹션은 `zero_fill == 0`이어야 합니다. 물리적인 0 저장 공간이 IR의 초기화 상태를 의미하지는 않습니다.
+
+`Layout::compute`는 `Result`를 반환하며, 모든 섹션의 입력 오브젝트·섹션 대응, 정렬, 파일 offset, 메모리 주소와 두 크기를 기록합니다. 주소·정렬 산술을 검사하고 입력 순서를 유지하며, 오브젝트 정렬 0은 제약 없음(정렬 1)으로 처리합니다. BSS는 파일 커서를 이동시키지 않습니다. 이는 payload 배치이며 실행 파일 헤더, 접근 권한을 가진 load segment, 재배치 적용은 별도 작업입니다.
+
+ELF writer는 overflow와 필드 폭을 줄일 때의 잘림을 거부합니다. 확장 섹션 번호는 미지원이며 생성된 표·재배치 섹션까지 포함한 전체 헤더 수는 `0xff00` 미만이어야 합니다. 직렬화된 출력의 기본 한도는 256 MiB입니다. `ObjectFile::write_with_limit` 또는 `write_elf_with_limit`으로 padding·표를 포함한 바이트 한도를 지정할 수 있으며, 파일에 저장하지 않는 BSS 메모리 크기는 한도에 포함하지 않습니다. 최종 바이트 벡터를 할당하기 전에 출력 크기를 검사합니다.
+
 ## 심볼 식별
 
 함수와 변수는 IR 내부에서 서로 다른 식별자를 사용합니다. 외부 연결은 프런트엔드가 명시한 `link_name`을 사용합니다. Whale은 충돌하는 공개 심볼 중 하나의 이름을 자동으로 바꾸지 않고 명시된 이름을 유지합니다.

@@ -79,6 +79,43 @@ The output target determines sizes, alignments, field offsets, and array strides
 
 Alignment in completed IR is a nonzero power of two. Resolve automatic alignment before producing that IR. Packed layouts, unions, and bitfields are unsupported in this profile and must be rejected.
 
+### Querying the output layout
+
+The Rust API computes storage layout independently of the build host. This example has seven padding bytes before the u64 field and six trailing padding bytes:
+
+```rust
+use ir::{allocation_align, layout_of, Target, Type};
+
+fn main() {
+    let target = Target::X86_64WhaleLinux;
+    let record = Type::Struct(vec![Type::U8, Type::U64, Type::U16]);
+    let layout = layout_of(&record, target).unwrap();
+    assert_eq!((layout.size, layout.align), (24, 8));
+    assert_eq!(layout.field_offsets, [0, 8, 16]);
+
+    let array = Type::Array(Box::new(record), 3);
+    let layout = layout_of(&array, target).unwrap();
+    assert_eq!((layout.size, layout.align), (72, 8));
+    assert_eq!(layout.element_stride, Some(24));
+    assert_eq!(allocation_align(&array, target).unwrap(), 16);
+}
+```
+
+```text
+struct{u8, u64, u16}: size 24, natural alignment 8
+field 0: byte 0
+field 1: byte 8
+field 2: byte 16
+array of 3: size 72, element stride 24
+standalone array placement alignment: 16
+```
+
+`layout_of` includes tail padding in size and array stride. Structs and tuples use the same ordered-field rules. Bool, i1, and u1 each occupy one byte. Empty structs and tuples have size zero and alignment one; a zero-length array retains its element's natural alignment. `void` has no storage layout, while `ptr<void>` occupies eight bytes.
+
+Natural alignment governs fields and array elements. `allocation_align` applies the SysV AMD64 requirement that a standalone local or global array of at least 16 bytes has at least 16-byte alignment. It does not increase an array field's alignment or element stride. AST lowering uses this allocation query for local storage.
+
+Size multiplication, field offset addition, and padding overflow return `LayoutError::Overflow`. `layout_of` limits aggregate nesting to 128 levels; `layout_of_with_limit` accepts a caller-selected budget. Neither query allocates storage for array elements. `pointer_stride` rejects a zero-sized pointee for native pointer arithmetic, although its storage layout remains valid. Packed layouts, unions, and bitfields have no supported type representation. These storage queries do not implement aggregate calling conventions or runtime bounds checks.
+
 ## Strings and C boundaries
 
 A string is an immutable byte sequence with an explicit length. UTF-8 is the default encoding. Embedded NUL bytes are allowed; there is no implicit terminating NUL. O0 does not automatically merge equal string objects.

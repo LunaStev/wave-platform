@@ -61,7 +61,7 @@ The object model stores `ObjectTarget` with `format`, `machine`, `endian`, and `
 
 `ObjectFile::new(ObjectFormat::ELF64)` remains a convenience constructor for that AMD64 identity. Code that previously accessed `object.format` must use `object.target.format`.
 
-These checks provide target selection and object identity. Aggregate size, field-offset, and stride queries, object-file reading, native ABI lowering, and executable linking remain unavailable. The scalar lowering path continues to assign explicit alignment; complete aggregate layout rules are described in the [memory reference](memory-model).
+These checks provide target selection and object identity. Aggregate size, field-offset, and stride queries are available through the IR layout API. Object-file reading, native ABI lowering, and executable linking remain unavailable. The scalar lowering path continues to assign explicit alignment; complete aggregate layout rules are described in the [memory reference](memory-model).
 
 ## Calls and signatures
 

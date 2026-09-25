@@ -79,6 +79,43 @@ GEP는 요소와 필드 단위로 주소를 계산합니다. 값을 읽는 명�
 
 완성된 IR의 정렬은 0이 아닌 2의 거듭제곱입니다. 자동 정렬은 이 IR을 생성하기 전에 결정해야 합니다. 이 프로파일에서 packed 레이아웃·union·bitfield는 지원하지 않으며 거부해야 합니다.
 
+### 출력 레이아웃 조회
+
+Rust API는 빌드 호스트와 무관하게 저장 레이아웃을 계산합니다. 다음 예제에는 u64 필드 앞의 padding 7바이트와 마지막 padding 6바이트가 있습니다.
+
+```rust
+use ir::{allocation_align, layout_of, Target, Type};
+
+fn main() {
+    let target = Target::X86_64WhaleLinux;
+    let record = Type::Struct(vec![Type::U8, Type::U64, Type::U16]);
+    let layout = layout_of(&record, target).unwrap();
+    assert_eq!((layout.size, layout.align), (24, 8));
+    assert_eq!(layout.field_offsets, [0, 8, 16]);
+
+    let array = Type::Array(Box::new(record), 3);
+    let layout = layout_of(&array, target).unwrap();
+    assert_eq!((layout.size, layout.align), (72, 8));
+    assert_eq!(layout.element_stride, Some(24));
+    assert_eq!(allocation_align(&array, target).unwrap(), 16);
+}
+```
+
+```text
+struct{u8, u64, u16}: size 24, natural alignment 8
+field 0: byte 0
+field 1: byte 8
+field 2: byte 16
+array of 3: size 72, element stride 24
+standalone array placement alignment: 16
+```
+
+`layout_of`의 크기와 배열 stride에는 마지막 padding이 포함됩니다. 구조체와 튜플은 같은 필드 순서 규칙을 사용합니다. Bool·i1·u1은 각각 1바이트를 차지합니다. 빈 구조체와 튜플은 크기 0·정렬 1이며, 길이 0인 배열은 요소의 자연 정렬을 유지합니다. `void`에는 저장 레이아웃이 없지만 `ptr<void>`는 8바이트입니다.
+
+필드와 배열 요소에는 자연 정렬을 사용합니다. `allocation_align`은 16바이트 이상인 독립된 지역·전역 배열에 최소 16바이트 정렬을 요구하는 SysV AMD64 규칙을 적용합니다. 배열 필드의 정렬이나 요소 stride를 늘리지는 않습니다. AST lowering은 지역 저장 공간에 이 배치 정렬 조회를 사용합니다.
+
+크기 곱셈, 필드 offset 덧셈, padding 계산의 overflow는 `LayoutError::Overflow`로 반환합니다. `layout_of`의 복합 타입 중첩 한도는 128단계이며 `layout_of_with_limit`으로 호출자가 한도를 지정할 수 있습니다. 배열 요소 수만큼 저장 공간을 할당하지 않습니다. `pointer_stride`는 native 포인터 산술에서 크기 0인 pointee를 거부하지만 해당 타입의 저장 레이아웃 자체는 유효합니다. Packed·union·bitfield는 지원되는 타입 표현이 없습니다. 이 저장 레이아웃 조회는 복합 타입 호출 규약이나 런타임 범위 검사를 구현하지 않습니다.
+
 ## 문자열과 C 경계
 
 문자열은 길이가 명시된 불변 바이트열입니다. 기본 인코딩은 UTF-8입니다. 내부 NUL을 허용하며 자동으로 끝 NUL을 붙이지 않습니다. O0는 내용이 같은 문자열 객체를 자동으로 합치지 않습니다.
