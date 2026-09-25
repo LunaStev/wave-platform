@@ -75,8 +75,10 @@ class WaveAppTest {
             compose.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
         }
         // Keep review artifacts even if the test runner uninstalls the fixture app.
-        val shell = InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(
-            "sh -c 'mkdir -p /data/local/tmp/wave-ui && cp ${directory.absolutePath}/$name.png /data/local/tmp/wave-ui/'")
-        ParcelFileDescriptor.AutoCloseInputStream(shell).use { it.readBytes() }
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        for (command in listOf("mkdir -p /data/local/tmp/wave-ui",
+            "cp ${directory.absolutePath}/$name.png /data/local/tmp/wave-ui/")) {
+            ParcelFileDescriptor.AutoCloseInputStream(automation.executeShellCommand(command)).use { it.readBytes() }
+        }
     }
 }

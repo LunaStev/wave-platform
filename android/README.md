@@ -90,7 +90,7 @@ the app itself follows the device's English/Korean interface language.
 
 Unit tests cover XML parsing, project/translation ordering, language defaults,
 error/retry states, restored selections, and a response arriving after cancellation.
-UI tests cover project isolation, navigation restoration, language selection, and
+UI tests cover the real launcher, project isolation, navigation restoration, language selection, and
 retry presentation. Reports are under `app/build/reports/`.
 The device CI artifact also includes screenshots rendered from the synthetic UI
 fixtures so visual changes can be reviewed without running a local emulator.
