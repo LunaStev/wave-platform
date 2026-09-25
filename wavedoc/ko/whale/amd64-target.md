@@ -61,7 +61,7 @@ Rust에서는 `ir::Target::lookup("x86_64-whale-linux")`로 타깃을 선택하�
 
 `ObjectFile::new(ObjectFormat::ELF64)`는 기존처럼 이 AMD64 식별 정보를 사용하는 편의 생성자입니다. 기존에 `object.format`에 접근하던 코드는 `object.target.format`을 사용해야 합니다.
 
-이 검사는 타깃 선택과 오브젝트 식별을 제공합니다. 구조체·배열 등의 크기, 필드 offset, stride 조회와 오브젝트 파일 읽기, native ABI lowering, 실행 파일 링크는 아직 지원하지 않습니다. 스칼라 lowering은 명시적인 정렬을 계속 지정하며, 전체 복합 타입 레이아웃 규칙은 [메모리 참조 문서](memory-model)에 정의되어 있습니다.
+이 검사는 타깃 선택과 오브젝트 식별을 제공합니다. 구조체·배열 등의 크기, 필드 offset, stride는 IR 레이아웃 API로 조회할 수 있습니다. 오브젝트 파일 읽기, native ABI lowering, 실행 파일 링크는 아직 지원하지 않습니다. 스칼라 lowering은 명시적인 정렬을 계속 지정하며, 전체 복합 타입 레이아웃 규칙은 [메모리 참조 문서](memory-model)에 정의되어 있습니다.
 
 ## 호출과 서명
 

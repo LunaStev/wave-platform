@@ -133,6 +133,63 @@ An AMD64 memory operand containing only a symbol defaults to RIP-relative addres
 
 File size and memory size are separate. BSS reserves memory but does not require an equally sized block of stored zeros in the object file. Custom sections carry their attributes, and symbols retain their binding and type information.
 
+### Reserving BSS without allocating its payload
+
+Save this as `buffer.asm`. It reserves one TiB of logical BSS; it does not allocate or write one TiB while assembling:
+
+```asm
+section .bss
+global buffer
+buffer:
+    resb 1099511627776
+buffer_end:
+
+section .text
+    ret
+```
+
+```sh
+whale asm --amd64 buffer.asm -o buffer.o
+```
+
+`buffer` has section-relative value 0 and `buffer_end` has value 1099511627776. The `.bss` header is `SHT_NOBITS` with that size and no file payload. Returning to `.bss` later continues its logical offset. Zero data directives also increase the logical size; nonzero initializers, relocations into BSS, and instructions in BSS are rejected.
+
+The same distinction is available through the object and linker APIs:
+
+```rust
+use linker::core::layout::Layout;
+use object::{ObjectFile, ObjectFormat, SectionKind};
+
+fn main() {
+    let mut object = ObjectFile::new(ObjectFormat::ELF64);
+    let text = object.add_section(".text", SectionKind::Text, 16);
+    object.sections[text].data = vec![0xc3];
+    let bss = object.add_section(".bss", SectionKind::Bss, 16);
+    object.sections[bss].zero_fill = 1 << 40;
+    assert!(object.sections[bss].data.is_empty());
+
+    let elf = object.write_with_limit(4096).unwrap();
+    assert!(elf.len() < 4096);
+    let layout = Layout::compute(&[object], 0x1000).unwrap();
+    assert_eq!(layout.file_size, 1);
+    assert_eq!(layout.memory_size, (1 << 40) + 16);
+    assert_eq!(layout.sections[bss].memory_address, 0x1010);
+    assert_eq!(layout.sections[bss].file_size, 0);
+}
+```
+
+```text
+section  memory address  file bytes       memory bytes
+.text    0x1000          1                1
+.bss     0x1010          0                1099511627776
+```
+
+`Section::zero_fill` counts additional unbacked BSS bytes. Its checked memory size is `data.len() + zero_fill`. Existing all-zero BSS `data` remains accepted, but callers can avoid that allocation with an empty `data` vector. Non-BSS sections require `zero_fill == 0`. Physical zero storage does not establish IR initialization state.
+
+`Layout::compute` returns `Result` and records an input object/section mapping, alignment, file offset, memory address and both sizes for every section. It checks address and alignment arithmetic, keeps input order, and treats object alignment 0 as no constraint (alignment 1). BSS never advances the file cursor. These are payload placements; executable headers, permission-bearing load segments and relocation application remain separate work.
+
+ELF writers reject overflow and field-width truncation. Extended section numbering is unsupported: the total header count, including generated tables and relocation sections, must be below `0xff00`. The default serialized-output limit is 256 MiB. `ObjectFile::write_with_limit` or `write_elf_with_limit` accepts a byte budget, including padding and tables; sparse BSS memory size does not count against it. Output size is validated before allocating the final byte vector.
+
 ## Symbol identity
 
 Functions and variables use separate identities inside the IR. External linking uses explicit `link_name` values supplied by the frontend. Whale preserves those names rather than automatically renaming one of two colliding exports.
