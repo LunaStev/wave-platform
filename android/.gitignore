@@ -1,0 +1,11 @@
+.gradle/
+.kotlin/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+*.jks
+*.keystore
+
+# The repository ignores runtime data/ directories; this one contains Kotlin source.
+!app/src/main/java/dev/wavelang/platform/data/
