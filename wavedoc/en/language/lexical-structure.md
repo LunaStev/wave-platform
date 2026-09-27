@@ -4,25 +4,25 @@ path: language/lexical-structure
 locale: en
 group: language
 group_order: 2
-order: 1
+order: 14
 title: Lexical structure
-summary: Identifiers, literals, statement delimiters, keywords, and built-in type spellings.
+summary: Describes identifiers, literals, delimiters, keywords, and type names.
 ---
 
-## Identifiers
+## identifier
 
-Identifiers name variables, functions, types, fields, and other declarations. Names are case-sensitive. Identifiers can use Unicode letters, digits, and `_`; a digit cannot begin an identifier.
+Identifiers name variables, functions, types, and fields. The name is case sensitive and can contain any combination of letters, numbers, and `_`. Numbers cannot be used in the first letter. The characters Unicode can also be used in identifiers.
 
 ```wave
 var request_count: i64 = 0;
 var 이름: str = "Wave";
 ```
 
-Projects may still prefer a consistent naming convention for tooling and searchability.
+In real projects, it is recommended to use a consistent naming convention for tool compatibility and searchability.
 
-## Statements and delimiters
+## Sentences and Separators
 
-Most declarations and expression statements end with `;`. Constructs with bodies, such as functions, conditionals, loops, and structs, use `{ ... }` blocks.
+Most declaration and expression statements end with `;`. Statements with a body, such as functions, conditional statements, loop statements, and structures, use the `{ ... }` block.
 
 ```wave
 var answer: i32 = 42;
@@ -32,7 +32,7 @@ fun double(value: i32) -> i32 {
 }
 ```
 
-## Literals
+## literal
 
 ```wave
 var integer: i32 = 42;
@@ -43,12 +43,53 @@ var enabled: bool = true;
 var address: ptr<u8> = null;
 ```
 
-Wave has integer, floating-point, string, character, Boolean, and `null` literals. Use `null` as a pointer value.
+You can use integers, floating point numbers, strings, characters, booleans, and `null` literals. Use `null` for pointer values.
 
-## Keywords and type spellings
+## Keywords and Type Names
 
-Wave keywords include:
+The main keywords used in the Wave grammar are as follows.
 
-`pub`, `fun`, `extern`, `export`, `type`, `enum`, `static`, `var`, `deref`, `const`, `if`, `else`, `proto`, `struct`, `while`, `for`, `in`, `out`, `clobber`, `as`, `asm`, `import`, `return`, `continue`, `print`, `input`, `println`, `match`, `break`, `true`, `false`, and `null`.
+`pub`, `fun`, `extern`, `export`, `type`, `enum`, `static`, `var`, `deref`, `const`, `if`, `else`, `proto`, `struct`, `while`, `for`, `in`, `out`, `clobber`, `as`, `asm`, `import`, `return`, `continue`, `print`, `input`, `println`, `match`, `break`, `true`, `false`, `null`.
 
-Built-in type spellings include `bool`, `char`, `byte`, `str`, the integer and floating-point types, `ptr<T>`, and `array<T, N>`. Keywords and built-in type names cannot be used as declaration names.
+Built-in type names include `bool`, `char`, `byte`, `str`, integer and floating point types, `ptr` and `array`. Pointers are written in the form `ptr<T>`, and fixed-length arrays are written in the form `array<T, N>`.
+
+## Strings and Characters escape
+
+|notation|meaning|
+| --- | --- |
+| `\n` |LF Line break|
+| `\r` | CR |
+| `\t` |tab|
+| `\\` |Backslash|
+| `\"` |double quotation marks|
+| `\xNN` |One byte specified as exactly two hexadecimal digits|
+
+General string characters are saved as UTF-8. Since `\xNN` preserves one byte, there is no guarantee that the entire string is a valid UTF-8. NUL (including `\x00`) inside a string literal is a compilation error. For data containing zeros, use a byte array and length.
+
+`char` The literal must fit into an 8-bit value. Characters that exceed that range, such as `'한'`, are errors. It is different from the string `"한"`.
+
+LF, CRLF, and CR alone in the source are each treated as one logical line break. These are rules about source location and comment termination and do not mean that they change the actual bytes of the file data.
+
+Additional grammar names include `variant`, `async`, and `await`, and the asynchronous value is expressed as `Future<T>`. The above independent `var` declaration block is a code fragment inside a function.
+
+[string class](/docs/en/language/arrays) · [Comments](/docs/en/language/comments)
+
+## Example of intentional failure
+
+If you run the program below check, an internal NUL error should occur. If you need 0 bytes, use the `[97, 0, 98]` byte array.
+
+<!-- wave-example: reject-string-nul -->
+```wave
+fun main() {
+    var text: str = "a\x00b";
+}
+```
+
+The character literal below also exceeds the 8-bit range, so it is a compilation error. To represent the string UTF-8, use `str` and double quotation marks.
+
+<!-- wave-example: reject-wide-char -->
+```wave
+fun main() {
+    var letter: char = '한';
+}
+```

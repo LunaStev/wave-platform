@@ -39,8 +39,8 @@ func (handler SEOHandler) publicStatus(request *http.Request) (int, bool) {
 			locale, start = parts[1], 2
 		}
 		documentPath := strings.Join(parts[start:], "/")
-		if documentPath == "" || documentPath == "whale" {
-			_, err := handler.documents.Navigation(locale, documentdomain.ProjectForPath(documentPath+"/"))
+		if documentPath == "" || documentPath == "whale" || documentPath == "stdlib" {
+			_, err := handler.documents.Navigation(locale, documentdomain.ProjectForPath(documentPath))
 			return contentStatus(err), true
 		}
 		_, err := handler.documents.Published(locale, documentPath)

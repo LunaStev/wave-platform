@@ -3,13 +3,13 @@ translation_set_id: quick-reference
 path: reference/syntax-quick-reference
 locale: en
 group: reference
-group_order: 3
+group_order: 5
 order: 3
 title: Syntax quick reference
-summary: Frequently used declarations, control flow, types, pointers, and FFI syntax on one page.
+summary: Frequently used declarations, control flow, types, pointers, and FFI grammar are organized on one page.
 ---
 
-## Declarations
+## declaration
 
 ```wave
 var value: i32 = 1;
@@ -19,7 +19,7 @@ static total: i64 = 0;
 type Identifier = u64;
 ```
 
-`var` is the local form and requires an explicit type. `const` and `static` are top-level declarations.
+`var` is the region, `const`/`static` are top-level declarations. Local variables explicitly declare their type.
 
 ## Functions
 
@@ -28,11 +28,12 @@ fun max(left: i32, right: i32) -> i32 {
     if (left > right) {
         return left;
     }
+
     return right;
 }
 ```
 
-## Generics
+## generic
 
 ```wave
 fun identity<T>(value: T) -> T {
@@ -42,9 +43,9 @@ fun identity<T>(value: T) -> T {
 var value: i32 = identity<i32>(10);
 ```
 
-Generic calls require explicit type arguments.
+When calling a generic, specify a type argument.
 
-## Structs and enums
+## Structure and enum
 
 ```wave
 struct Pair {
@@ -58,7 +59,7 @@ enum Result -> i32 {
 }
 ```
 
-## Conditionals and loops
+## Conditions and loops
 
 ```wave
 if (ready) {
@@ -74,13 +75,19 @@ for (var i: i32 = 0; i < 10; i += 1) {
 }
 
 match (status) {
-    Ready => { println("ready"); }
-    0 => { println("zero"); }
-    _ => { println("other"); }
+    Ready => {
+        println("ready");
+    }
+    0 => {
+        println("zero");
+    }
+    _ => {
+        println("other");
+    }
 }
 ```
 
-`if`, `while`, `for`, and `match` use parenthesized headers.
+The headers of `if`, `while`, `for`, and `match` use parentheses.
 
 ## Arrays and pointers
 
@@ -90,7 +97,7 @@ var p: ptr<i32> = &values[0];
 var first: i32 = deref p;
 ```
 
-## Console I/O
+## console input/output
 
 ```wave
 print("value = ");
@@ -98,14 +105,31 @@ println("{}", value);
 input("{}", value);
 ```
 
-The first argument is a string literal. Each exact `{}` placeholder requires one following expression; `input` destinations must be assignable.
+The first argument is a string literal. Each exact `{}` placeholder requires an expression following it, and the `input` target must be assignable.
 
-## Imports and FFI
+## import and public items
 
 ```wave
-import("std::string::len")::{len};
+import("std::string::len");
 import("./helpers" as helpers);
-import("math")::{add, Point};
+import("math")::{
+    Vector
+};
+
+pub fun add(left: i32, right: i32) -> i32 {
+    return left + right;
+}
+
+pub import("./extra"):: {
+    increment
+};
+```
+
+The local path starts with `./`. The alias import specifies the module name, and the select import imports the required public entries into this file's namespace. `pub import` re-exports the selected items.
+
+## FFI
+
+```wave
 extern(c) fun native_call(value: i32) -> i32;
 
 export(c) fun wave_call(value: i32) -> i32 {
@@ -113,16 +137,14 @@ export(c) fun wave_call(value: i32) -> i32 {
 }
 ```
 
-Use `pub` on declarations imported by other Wave modules, and `pub import("path")::{name};` to re-export selected public names.
-
-## Target-conditioned items
+## Target conditional item
 
 ```wave
 #[target(os="linux", arch="riscv64")]
 extern(c) fun platform_call(value: i32) -> i32;
 ```
 
-Supported condition keys are `arch`, `os`, `env`, and `abi`. The attribute controls the next top-level item.
+Support condition keys are `arch`, `os`, `env`, `abi`. Properties control the next top-level item.
 
 ## Inline assembly
 
@@ -136,12 +158,16 @@ asm {
 }
 ```
 
-Instruction text and register names are target-specific. Declare every input, output, and hidden clobber required by the block.
+Instruction text and register names are target dependent. Declare all inputs, outputs and hidden clobber required for the block.
 
-## Compiler queries
+## source inspection
 
 ```shell
 wavec build main.wave --emit=check
 wavec print supported-targets
 wavec print supported-emit-kinds
 ```
+
+## Learning and Example Range
+
+Examples of local variables and statements separately displayed outside the function are code fragments inserted into the body of the function. Complete running examples and exercises follow in [Wave Learning Process](/docs/en/getting-started/overview). Please check [Standard library](/docs/en/stdlib) for detailed rules of memory and external functions.

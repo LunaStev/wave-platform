@@ -26,13 +26,16 @@ const docLocale = computed<DocumentLocale>(() => isDocumentLocale(route.params.d
 const docBase = computed(() => `/docs/${docLocale.value}`)
 
 const requestedPath = computed(() => {
-  if (route.meta.documentationProject === 'whale') return 'whale'
+  if (route.meta.documentationProject === 'whale' || route.meta.documentationProject === 'stdlib') return route.meta.documentationProject
   const value = route.params.pathMatch
   return Array.isArray(value) ? value.join('/') : String(value ?? '')
 })
 const currentPath = computed(() => documentationPath(requestedPath.value))
 const project = computed(() => documentationProject(requestedPath.value))
-const projectName = computed(() => project.value === 'whale' ? 'Whale' : 'Wave')
+function projectLabel(value: string) {
+  return value === 'stdlib' ? t('docs.standardLibrary') : value === 'whale' ? 'Whale' : 'Wave'
+}
+const projectName = computed(() => projectLabel(project.value))
 const catalogBase = computed(() => documentationCatalog(docLocale.value, project.value))
 const filtered = computed(() => {
   const needle = query.value.trim().toLocaleLowerCase(docLocale.value)
@@ -52,6 +55,7 @@ const next = computed(() => currentIndex.value >= 0 && currentIndex.value < docu
 function groupName(group: string) {
   const names: Record<string, string> = {
     'getting-started': t('docs.gettingStarted'), language: t('docs.language'),
+    practice: t('docs.practice'), stdlib: t('docs.standardLibrary'),
     reference: t('docs.reference'), toolchain: t('docs.tools'), whale: 'Whale',
   }
   return names[group] ?? group
@@ -104,13 +108,13 @@ function changeDocumentLocale(event: Event) {
   saveDocumentLocale(value)
   router.push(currentPath.value
     ? { name: 'document', params: { docLocale: value, pathMatch: currentPath.value.split('/') } }
-    : { name: project.value === 'whale' ? 'docs-whale' : 'docs-locale', params: { docLocale: value } })
+    : { name: project.value === 'wave' ? 'docs-locale' : `docs-${project.value}`, params: { docLocale: value } })
 }
 watchEffect(() => {
   if (!document.value) {
     applyPageSEO({
-      title: failed.value ? 'Page not found · Wave' : project.value === 'whale' ? 'Whale Documentation · Wave' : 'Documentation · Wave',
-      description: failed.value ? 'The requested document could not be loaded.' : project.value === 'whale' ? 'Whale guides and reference documentation.' : 'Official Wave programming language guides and reference documentation.',
+      title: failed.value ? 'Page not found · Wave' : `${projectName.value} Documentation · Wave`,
+      description: failed.value ? 'The requested document could not be loaded.' : project.value === 'stdlib' ? t('docs.stdlibLead') : project.value === 'whale' ? t('docs.whaleLead') : t('docs.lead'),
       locale: docLocale.value, path: route.path, noIndex: failed.value,
       schema: { '@type': 'CollectionPage' },
       alternates: !currentPath.value ? [...documentLocales.map((item) => ({ locale: item.id, path: documentationCatalog(item.id, project.value) })), { locale: 'x-default', path: documentationCatalog('en', project.value) }] : [],
@@ -158,7 +162,7 @@ watchEffect(() => {
         <label class="docs-search"><Search :size="16" aria-hidden="true" /><input v-model="query" :aria-label="t('docs.search')" :placeholder="t('docs.search')" /></label>
       </div>
       <nav class="docs-width docs-project-tabs" :aria-label="t('docs.projectSelector')">
-        <RouterLink v-for="item in (['wave', 'whale'] as const)" :key="item" :to="documentationCatalog(docLocale, item)" :class="{ active: project === item }" :aria-current="project === item ? 'page' : undefined">{{ item === 'wave' ? 'Wave' : 'Whale' }}</RouterLink>
+        <RouterLink v-for="item in (['wave', 'stdlib', 'whale'] as const)" :key="item" :to="documentationCatalog(docLocale, item)" :class="{ active: project === item }" :aria-current="project === item ? 'page' : undefined">{{ projectLabel(item) }}</RouterLink>
       </nav>
     </header>
 
@@ -198,7 +202,7 @@ watchEffect(() => {
     </div>
 
     <div v-else class="docs-width docs-catalog-page">
-      <header class="docs-titlebar"><h1>{{ projectName }} {{ t('docs.title') }}</h1><p>{{ project === 'whale' ? t('docs.whaleLead') : t('docs.lead') }}</p></header>
+      <header class="docs-titlebar"><h1>{{ projectName }} {{ t('docs.title') }}</h1><p>{{ project === 'stdlib' ? t('docs.stdlibLead') : project === 'whale' ? t('docs.whaleLead') : t('docs.lead') }}</p></header>
       <div class="docs-catalog">
         <section v-for="group in groups" :key="group.id" class="docs-catalog-group">
           <h2>{{ group.title }}</h2>

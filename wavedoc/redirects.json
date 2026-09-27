@@ -1,0 +1,20 @@
+{
+  "learn/first-program": "language/program-structure",
+  "learn/variables": "language/declarations-and-types",
+  "learn/expressions": "language/expressions-and-operators",
+  "learn/control-flow": "language/control-flow",
+  "learn/functions": "language/functions-and-generics",
+  "learn/arrays-strings": "language/arrays",
+  "learn/strings": "language/strings",
+  "learn/data-models": "language/structures-enums-and-aliases",
+  "learn/pointers": "language/explicit-memory-type-model",
+  "learn/allocation": "language/allocation",
+  "learn/modules-generics": "language/modules-imports-and-ffi",
+  "learn/errors": "language/errors",
+  "learn/async": "language/async-and-never",
+  "toolchain/ecosystem": "whale/ecosystem",
+  "toolchain/whale-cli": "whale/whale-cli",
+  "toolchain/vex-package-manager": "whale/vex-package-manager",
+  "toolchain/build-link-targets": "whale/build-link-targets",
+  "getting-started/design-goals": "getting-started/overview"
+}

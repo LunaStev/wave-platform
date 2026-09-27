@@ -2,57 +2,34 @@
 translation_set_id: system-io
 path: reference/system-io-network-process
 locale: ja
-group: reference
-group_order: 3
-order: 6
-title: システム入出力、ファイル、ネットワーク、プロセス
-summary: ファイルディスクリプタ方式の入出力、ファイルシステム、ソケット／TCP／UDP、プロセス API と失敗時の契約を説明します。
+group: stdlib
+group_order: 1
+order: 15
+title: システムの機能とプロセス
+summary: 上位APIとOSインタフェースの境界、プロセス寿命を説明します。
 ---
 
-## ファイルを開く／閉じる
+## 機能別文書
 
-```wave
-import("std::fs::file")::{fs_open_read, fs_close};
+ファイルを扱うには[fsとio](/docs/ja/stdlib/files-io)、接続するには[TCP](/docs/ja/stdlib/tcp)、アドレスを調べるには[resolver](/docs/ja/stdlib/resolution)を読んでください。以下は、プロセスと低レベルのOSアクセスルールです。
 
-fun main() {
-    var fd: i64 = fs_open_read("input.txt");
-    if (fd >= 0) {
-        fs_close(fd);
-    }
-}
+## プロセス基本 API
+
+```text
+std::process::core
+proc_exit(code: i32) -> !
+proc_getpid() -> i64
+proc_getppid() -> i64
+proc_execve(path: str, argv: ptr<ptr<i8>>, envp: ptr<ptr<i8>>) -> i64
+proc_waitpid_raw(pid: i64, status: ptr<i32>, options: i32) -> i64
 ```
 
-`fs_open_read` は負の失敗結果をそのまま返すことがあるため、使用前に確認します。`fs_close` も結果を返します。クローズの失敗を扱う必要があるコードでは、その結果も確認してください。
+`proc_exit`は呼び出し点に戻りません。終了前に必要なファイル・メモリの整理を直接行ってください。 `proc_execve`は、成功すると既存のプロセスイメージを置き換えるため、一般的な子生成関数とは異なります。 rawargv/envpは終了を示すnullポインタと各文字列のNUL終了を準備する必要があります。
 
-## std::io
+`std::process::spawn`のspawn関数は生成結果を、待機関数は子の終了状態を扱います。生成の成功とプログラムの成功の終了は異なります。パイプを作成すると、親と子が未使用の端を閉じる必要があり、EOFが渡されます。キャプチャパイプを読み取らずに子の終了だけを待つと、バッファは次々に待つことができます。
 
-`std::io` はファイルディスクリプタを使った読み書き、指定長の完全な転送、シーク、コピーを提供します。バッファを受け取る API では、ポインタと長さの単位および契約を一致させてください。
+## 移植性と低レベルアプローチ
 
-## std::fs
+fork/exec、ファイル記述子、Windowsハンドルは同じOS機能ではありません。選択したターゲットのサポートを確認し、unsupportedを通常の失敗パスとして処理します。 `std::sys`はOS固有のインターフェースであり、数値フラグとレイアウトを他のOSでは再利用しません。
 
-`std::fs::file` には、存在確認、オープン、クローズ、サイズ取得、ファイル削除、ディレクトリの作成と削除、完全な読み書き、ファイルコピーの補助機能があります。
-
-```wave
-var size: i64 = fs_file_size("input.txt");
-if (size < 0) {
-    println("file error");
-}
-```
-
-## ネットワーク
-
-`std::net` は、アドレス処理、基本ソケット、ソケットオプション、ポーリング、TCP、UDP に分かれています。ネットワークコードでは、次の項目を明示的に管理します。
-
-- アドレスファミリーとソケット種別
-- ポートと整数のバイトオーダー
-- ブロッキング状態とノンブロッキング状態
-- 部分的な読み書き
-- シャットダウンとエラー結果
-
-## プロセス
-
-`std::process` は、プロセス作成、待機、定数、標準ストリームのリダイレクトを行うソース単位を提供します。プロセス作成の成功と、子プロセスが最終的に返す終了ステータスは別の結果として扱います。
-
-## プラットフォーム依存性
-
-これらのモジュールは `std::sys` とネイティブ呼び出しを通してオペレーティングシステム境界を越えます。エラー値、フラグ、一部の構造体は選択した OS と ABI に従います。プラットフォーム依存のプログラムではターゲットを明示し、その環境で直接テストしてください。
+外部Cライブラリと直接連動するときは、[FFI](/docs/ja/language/modules-imports-and-ffi)をお読みください。上位stdAPIを書くために任意にlibc関数を宣言する必要はありません。 [ターゲットとリンク環境](/docs/ja/whale/build-link-targets)を先に確認してください。

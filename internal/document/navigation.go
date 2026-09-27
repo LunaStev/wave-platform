@@ -7,8 +7,16 @@ import (
 
 // ProjectForPath uses document paths, not groups or titles, as the namespace.
 func ProjectForPath(path string) string {
-	if strings.HasPrefix(path, "whale/") {
+	if path == "whale" || strings.HasPrefix(path, "whale/") {
 		return "whale"
+	}
+	if path == "stdlib" || strings.HasPrefix(path, "stdlib/") {
+		return "stdlib"
+	}
+	// Keep the published reference URLs while giving these pages their own tab.
+	switch path {
+	case "reference/standard-library", "reference/string-and-bytes", "reference/memory-and-buffer", "reference/system-io-network-process":
+		return "stdlib"
 	}
 	return "wave"
 }

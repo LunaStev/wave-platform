@@ -4,7 +4,7 @@ path: language/console-io-and-formatting
 locale: ko
 group: language
 group_order: 2
-order: 13
+order: 16
 title: 콘솔 입출력과 포매팅
 summary: print, println, input 문장과 자리표시자 규칙을 설명합니다.
 ---
@@ -35,8 +35,10 @@ println("name = {}, score = {}", name, score);
 자리표시자 수와 뒤따르는 식의 수는 정확히 같아야 합니다. 수가 다르면 문법 오류입니다.
 
 ```wave
-println("{} {}", one);       // 오류: 자리표시자 2개, 값 1개
-println("plain text", one); // 오류: 자리표시자 없음, 값이 남음
+println("{} {}", one);
+// 오류: 자리표시자 2개, 값 1개
+println("plain text", one);
+// 오류: 자리표시자 없음, 값이 남음
 ```
 
 다른 형태의 중괄호는 일반 텍스트로 남습니다. 이 문법에는 이름이나 번호가 붙은 자리표시자가 없습니다.
@@ -68,3 +70,11 @@ input("{}", number);
 ## 런타임 경계
 
 이 문장들은 hosted 환경의 콘솔 입출력을 사용합니다. 프리스탠딩 환경에서는 커널이나 장치가 제공하는 입출력을 함수 또는 FFI 경계로 정의해야 합니다.
+
+## 입력 값과 범위
+
+bool 입력은 `0`과 `1`만 허용합니다. 2를 true로 해석하거나 `true`라는 문자열을 같은 입력으로 받지 않습니다. 정수 입력은 대상 정수 폭의 범위 안에 있어야 합니다. 128·256·512·1024비트 정수도 타입의 전체 폭을 기준으로 처리합니다.
+
+형식 오류, 범위 초과, 필요한 입력 전 EOF는 실패입니다. 내장 input은 실패를 반환해 재입력하는 함수가 아니라 프로세스를 실패 종료시키는 입력 기능입니다. 복구 가능한 입력 처리가 필요하면 io로 바이트를 읽고 별도 파서를 구성합니다.
+
+[입력 계산기 실습](/docs/ko/practice/input-calculator) · [파일과 io](/docs/ko/stdlib/files-io)

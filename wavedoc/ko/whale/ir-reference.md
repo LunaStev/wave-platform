@@ -3,8 +3,8 @@ translation_set_id: whale-ir-reference
 path: whale/ir-reference
 locale: ko
 group: whale
-group_order: 5
-order: 2
+group_order: 1
+order: 6
 title: Whale IR 참조
 summary: 타입, 식별자, 함수의 유효성, 평가 순서와 교환 형식을 설명합니다.
 ---
@@ -113,7 +113,7 @@ fn main() {
     let mut function = module.begin_function("answer", vec![], Type::I32);
     let input = function.const_i32(42);
     let callback = function.function_addr(identity).unwrap();
-    // 직접 호출의 결과는 사용하지 않아도 정의를 유지합니다.
+    // The direct call's result remains defined even though it is unused.
     function.call(Callee::Direct(identity), vec![input]).unwrap();
     let result = function.call(Callee::Indirect(callback), vec![input]).unwrap().unwrap();
     function.ret(Some(result));

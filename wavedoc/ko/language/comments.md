@@ -4,7 +4,7 @@ path: language/comments
 locale: ko
 group: language
 group_order: 2
-order: 11
+order: 15
 title: 주석
 summary: 한 줄 주석, 중첩 가능한 블록 주석과 닫히지 않은 주석 진단을 설명합니다.
 ---
@@ -14,7 +14,8 @@ summary: 한 줄 주석, 중첩 가능한 블록 주석과 닫히지 않은 주�
 `//` 뒤의 내용은 줄 끝까지 주석입니다.
 
 ```wave
-var count: i32 = 10; // 현재 요청 수
+var count: i32 = 10;
+// 현재 요청 수
 ```
 
 ## 블록 주석
@@ -31,7 +32,7 @@ var count: i32 = 10; // 현재 요청 수
 ```wave
 /* 바깥 주석
    /* 안쪽 주석 */
-   다시 바깥 주석
+다시 바깥 주석
 */
 ```
 

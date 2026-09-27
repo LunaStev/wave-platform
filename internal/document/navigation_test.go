@@ -79,3 +79,16 @@ func TestMarkdownDiscoveryAcceptsNewWhaleFilesWithoutRegistry(t *testing.T) {
 		t.Fatalf("metadata lost: %#v", second[1])
 	}
 }
+
+func TestStandardLibraryNamespaceAndLegacyURLs(t *testing.T) {
+	for _, path := range []string{"stdlib", "stdlib/buffer", "reference/standard-library", "reference/string-and-bytes", "reference/memory-and-buffer", "reference/system-io-network-process"} {
+		if ProjectForPath(path) != "stdlib" {
+			t.Fatalf("library page %s placed in wrong project", path)
+		}
+	}
+	for _, path := range []string{"stdlib-extra/buffer", "reference/diagnostics", "language/types"} {
+		if ProjectForPath(path) != "wave" {
+			t.Fatalf("Wave page %s placed in wrong project", path)
+		}
+	}
+}

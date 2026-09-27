@@ -3,68 +3,50 @@ translation_set_id: diagnostics
 path: reference/diagnostics
 locale: en
 group: reference
-group_order: 3
+group_order: 5
 order: 2
-title: Diagnostics and troubleshooting
-summary: Human and JSON diagnostics, check mode, debug output, and a reproducible bug-report workflow.
+title: Troubleshooting: From installation to execution
+summary: Isolate failed steps and narrow down the cause with reproducible information.
 ---
 
-## Record the compiler version
+## First, distinguish the stages of failure
 
-Before investigating syntax behavior, record the exact installed compiler version.
+|observed phenomenon|Check first|next action|
+| --- | --- | --- |
+|wavec Command not found|PATH and executable file location|Run with absolute path and set PATH|
+|Can't find files needed to run|Are any files missing from the installation folder?|Unpack and install the entire package again|
+|std import Failed| `wavec print std-path` |Correspondence: Install std or specify `--std-root`|
+|Source location and type error output| `wavec check main.wave` |Fix the first error and check again|
+|Build failure for other OS·CPU targets|Specified target and target environment|[Cross build settings](/docs/en/whale/build-link-targets) Confirm|
+|Execution fails after successful build|exit code, input, working directory|Execution environment and API error check|
 
-```shell
-wavec --version
+## A small diagnostic example
+
+Here's the entire program, which is intentionally incorrect:
+
+```wave
+fun main() {
+    var count: i32 = 1;
+    println("{}", missing);
+}
 ```
 
-Use `wavec --help` to confirm the command and option spelling accepted by that installation.
+`wavec check main.wave` must point to the undeclared name missing. Change the variable name to count, then check and run again. Focus on the file, location, and cause rather than the entire diagnostic text. Subsequent errors may be a result of the initial error.
 
-## Check source without linking
+## When an executable fails
 
-To separate Wave source errors from linking or execution:
+In the Linux/macOS shell, the exit code is checked immediately after execution as `echo $?`, and in PowerShell, it is `$LASTEXITCODE`. Input error and explicit `return 1` are not the same cause. Invalid runtime values ​​for shift count or real conversion can cause trap. Check out [operation rules](/docs/en/language/expressions-and-operators).
 
-```shell
-wavec build main.wave --emit=check
-```
+Relative file paths are affected by the executable working directory rather than the source file location. Don't treat a file read failure as a string length of 0, check the return error first. Network connection failures are checked through address lookup, server waiting, permissions, and timeouts.
 
-This checks Wave input without producing a normal executable.
+## Information needed to report a problem
 
-## JSON diagnostics
+1. `wavec --version` Output and exact command executed.
+2. target. specified separately from host OS·architecture
+3. Compiler source used with the selected std path.
+4. Minimal source, input and required files to reproduce the problem.
+5. Expected results, actual results, diagnosis and exit codes.
 
-For IDEs, CI, and build tools that need structured diagnostics:
+Passwords, tokens, and personal file contents are removed. If the problem goes away when you reduce the minimal example, the last element you removed is the clue. `--error-format=json` is available when the tool collects diagnostics.
 
-```shell
-wavec --error-format=json build main.wave --emit=check
-```
-
-Keep the default human-readable format for terminal use and JSON for automated consumers.
-
-## Inspect compiler output
-
-```shell
-wavec --debug-wave=tokens build main.wave --emit=check
-wavec --debug-wave=ast build main.wave --emit=check
-```
-
-`--debug-wave` prints selected representations such as tokens, the AST, or IR. For an ordinary source error, start with the first diagnostic and its source location; use debug output when investigating compiler behavior or building developer tools.
-
-## Separate common failure classes
-
-1. **Parsing/type errors** also fail under `--emit=check`.
-2. **Import errors** require checking `std-path`, `--dep-root`, `--dep`, and the actual filesystem layout.
-3. **Link errors** require checking `--link`, `-L`, the target ABI, and symbol names.
-4. **Runtime errors** occur after a successful build and should be separated by exit status and runtime environment.
-5. **FFI errors** require rechecking widths, string representation, pointer lifetime, and calling convention against the native declaration.
-
-## A useful bug report
-
-Include:
-
-- `wavec --version`
-- Host OS and target triple
-- The complete command you ran
-- A minimal `.wave` source that reproduces the issue
-- Full diagnostic output
-- Expected and actual behavior
-
-Remove unrelated secrets, tokens, and private paths before posting logs publicly.
+[Installation](/docs/en/getting-started/install) · [compiler command](/docs/en/getting-started/compiler) · [Targets and Links](/docs/en/whale/build-link-targets)

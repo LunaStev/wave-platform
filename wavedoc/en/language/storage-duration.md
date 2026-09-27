@@ -4,18 +4,18 @@ path: language/storage-duration
 locale: en
 group: language
 group_order: 2
-order: 12
+order: 18
 title: Storage duration and mutability
-summary: Distinguish the scope and write semantics of var, const, and static.
+summary: Distinguish between the scope and writability of var, const and static.
 ---
 
-## Declaration semantics
+## Meaning of each declaration
 
-| Form | Allowed location | Reassignable | Purpose |
+|format|Allowed Location|resubmit|Use|
 | --- | --- | --- | --- |
-| `var` | Function/block | Yes | Ordinary mutable local variable |
-| `const` | Top level | No | Global constant declaration |
-| `static` | Top level | Yes | Static storage that exists for program lifetime |
+| `var` |Function/block|possible|Common mutable local variables|
+| `const` |top|Impossible|Global constant declaration|
+| `static` |top|possible|Static stored declarations that exist for the life of the program|
 
 ```wave
 const PAGE_SIZE: i32 = 4096;
@@ -23,28 +23,32 @@ static request_count: i64 = 0;
 
 fun main() {
     var limit: i32 = 4;
-    var active: i32 = 0;
+    var current: i32 = 0;
     var retries: i32 = 0;
 
-    active += 1;
+    current += 1;
     retries += 1;
-    println("{} {} {}", limit, active, retries);
+    println("{} {} {}", limit, current, retries);
 }
 ```
 
-## Local variables
+## Local declaration rules
 
 ```wave
 var value: i32 = 1;
 value = 2;
 ```
 
-`var` declares local storage, and its value can be reassigned. Use a top-level `const` for a named constant.
+A new value can be assigned to a local variable declared as `var`. Constants to be used throughout the program are declared at the top level as `const`.
 
-## Local const and static
+## Local use of const and static
 
-`const` and `static` are top-level declarations. They cannot be declared inside a function body or used as a for-loop initializer.
+`const` and `static` are top-level declarations. The function body and `for` initialization use the local declaration `var`.
 
-## Lifetimes and pointers
+## Lifespan and Pointers
 
-You can take the address of a local with `&`, but `ptr<T>` does not track how long the referenced storage remains valid. If a local address escapes its scope, the surrounding program must ensure that the address is not used after the storage becomes invalid.
+You can get the address of a local variable as `&`, but the type `ptr<T>` does not track the actual lifetime of the storage pointed to by the pointer. When passing a local storage address out of a function, the program structure must directly ensure that the address remains valid.
+
+## Learning and Example Range
+
+[Practice with the full program](/docs/en/getting-started/overview) · [Standard library](/docs/en/stdlib)

@@ -11,10 +11,12 @@ published.
 English is the fallback when a page has not been translated yet. A fallback
 page is displayed as English and is never labelled as a completed translation.
 
-Wave and Whale have separate navigation. Add Whale documents under
+Wave, standard library, and Whale have separate navigation. Add Whale documents under
 `{locale}/whale/` with a front-matter `path` beginning with `whale/`; they appear
 at `/docs/{locale}/whale/{page}` after rebuilding and restarting the application.
-All other paths remain in the Wave catalogue. No frontend registration is
+The `stdlib/` namespace and the four existing library reference paths are
+shown under `/docs/{locale}/stdlib`; their article URLs remain unchanged.
+Other paths remain in the Wave catalogue. No frontend registration is
 required. See [authoring instructions](../docs/document-authoring.md) for metadata,
 ordering, and translation rules.
 
@@ -31,3 +33,9 @@ Authoring rules:
   language before introducing edge cases.
 - Treat the legacy website documentation as background material, not as an
   authoritative syntax reference.
+
+The language course and detailed rules share `{locale}/language/`; there is no
+separate `learn` collection. Build, linking, package management, and CLI material
+live under `{locale}/whale/`. Moved URLs are recorded in `redirects.json`, shared
+by the server and browser. Startup seeding archives retired official pages while
+preserving their revisions and independently authored documents.

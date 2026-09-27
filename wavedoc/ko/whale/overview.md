@@ -3,7 +3,7 @@ translation_set_id: whale-overview
 path: whale/overview
 locale: ko
 group: whale
-group_order: 5
+group_order: 1
 order: 1
 title: Whale 문서
 summary: 툴체인 구성 요소, 사용 가능한 명령과 참조 문서를 안내합니다.
@@ -14,6 +14,15 @@ summary: 툴체인 구성 요소, 사용 가능한 명령과 참조 문서를 �
 Whale은 프로그래밍 언어 구현과 컴파일러 도구를 위한 범용 컴파일러 툴체인입니다. 타입을 갖는 중간 표현(IR), AMD64 어셈블러, 오브젝트 파일 라이브러리, 링커 기반 기능을 제공합니다. 각 구성 요소는 Rust 라이브러리와 `whale` 명령을 통해 사용합니다.
 
 IR은 기계어 인코딩과 독립적으로 계산의 의미를 표현합니다. 어셈블러는 기계 명령을 인코딩해 재배치 가능한 오브젝트를 생성합니다. 오브젝트 라이브러리는 섹션·심볼·재배치를 표현합니다. 링커는 오브젝트 사이의 참조를 해결하고 실행 파일을 배치합니다.
+
+## 빌드와 도구 사용
+
+| 작업 | 문서 |
+| --- | --- |
+| 각 도구의 역할 | [툴체인 구성](/docs/ko/whale/ecosystem) |
+| Wave 프로그램 빌드·링크·대상 선택 | [빌드와 링크](/docs/ko/whale/build-link-targets) |
+| 패키지·의존성 관리 | [Vex](/docs/ko/whale/vex-package-manager) |
+| Whale 명령 실행 | [Whale CLI](/docs/ko/whale/whale-cli) |
 
 ## 문서 안내
 
@@ -69,7 +78,7 @@ ELF64 오브젝트를 생성합니다.
 
 Whale의 자체 어셈블러를 사용하므로 외부 어셈블러가 필요하지 않습니다. 결과물에는 호출 가능한 함수가 들어 있으며 프로세스 시작 코드는 포함하지 않습니다.
 
-실험적 AST→IR 명령은 `--features socket-cli`로 빌드하면 사용할 수 있습니다. CLI의 명령은 [명령 참조](/docs/ko/toolchain/whale-cli)를 참고하세요.
+실험적 AST→IR 명령은 `--features socket-cli`로 빌드하면 사용할 수 있습니다. CLI의 명령은 [명령 참조](/docs/ko/whale/whale-cli)를 참고하세요.
 
 ## 라이브러리 사용과 진단
 

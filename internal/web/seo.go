@@ -21,6 +21,7 @@ import (
 	questiondomain "github.com/wavefnd/wave-platform/internal/question"
 	rfcdomain "github.com/wavefnd/wave-platform/internal/rfc"
 	"github.com/wavefnd/wave-platform/internal/storage"
+	"github.com/wavefnd/wave-platform/wavedoc"
 )
 
 type sitemapURL struct {
@@ -140,10 +141,12 @@ func (handler SEOHandler) Sitemap(writer http.ResponseWriter, request *http.Requ
 				return
 			}
 			entries = append(entries, sitemapURL{Location: handler.location(base, "docs", locale)})
+			catalogs := map[string]bool{"wave": true}
 			for _, document := range documents {
-				if documentdomain.ProjectForPath(document.Path) == "whale" {
-					entries = append(entries, sitemapURL{Location: handler.location(base, "docs", locale, "whale")})
-					break
+				project := documentdomain.ProjectForPath(document.Path)
+				if !catalogs[project] {
+					entries = append(entries, sitemapURL{Location: handler.location(base, "docs", locale, project)})
+					catalogs[project] = true
 				}
 			}
 			for _, document := range documents {
@@ -494,7 +497,7 @@ func (handler SEOHandler) metadata(requestPath, base string) pageMetadata {
 		}
 		metadata.Language = documentLocale
 		documentPath := strings.Join(segments[documentStart:], "/")
-		project := documentdomain.ProjectForPath(documentPath + "/")
+		project := documentdomain.ProjectForPath(documentPath)
 		projectName := "Wave"
 		catalogPath := ""
 		if project == "whale" {
@@ -503,11 +506,17 @@ func (handler SEOHandler) metadata(requestPath, base string) pageMetadata {
 			metadata.Title = "Whale Documentation · Wave"
 			metadata.Description = "Whale guides and reference documentation."
 		}
+		if project == "stdlib" {
+			projectName, catalogPath = "Standard library", "stdlib"
+			documentRoot = handler.location(base, "docs", documentLocale, catalogPath)
+			metadata.Title = "Standard Library Documentation · Wave"
+			metadata.Description = "Wave standard library modules, API contracts, and examples."
+		}
 		metadata.DocumentProject = project
 		metadata.DocumentLocale = documentLocale
 		metadata.Alternates = handler.documentCatalogAlternates(base, project)
 		metadata.Breadcrumbs = []seoBreadcrumb{home, {Name: projectName + " Documentation", URL: documentRoot}}
-		if documentPath != "" && documentPath != "whale" && handler.documents != nil {
+		if documentPath != "" && documentPath != "whale" && documentPath != "stdlib" && handler.documents != nil {
 			document, err := handler.documents.Published(documentLocale, documentPath)
 			if errors.Is(err, storage.ErrNotFound) && documentLocale != "en" {
 				if fallback, fallbackErr := handler.documents.Published("en", documentPath); fallbackErr == nil {
@@ -864,10 +873,16 @@ func (handler SEOHandler) CanonicalRedirect(requestPath string) string {
 		return strings.TrimRight(requestPath, "/")
 	}
 	segments := strings.Split(strings.Trim(requestPath, "/"), "/")
+	if len(segments) >= 3 && segments[0] == "docs" && supportedDocumentLocale(segments[1]) {
+		path := strings.Join(segments[2:], "/")
+		if target := wavedoc.CanonicalDocumentPath(path); target != path {
+			return "/docs/" + segments[1] + "/" + target
+		}
+	}
 	if len(segments) >= 2 && segments[0] == "docs" && !supportedDocumentLocale(segments[1]) && handler.documents != nil {
-		documentPath := strings.Join(segments[1:], "/")
+		documentPath := wavedoc.CanonicalDocumentPath(strings.Join(segments[1:], "/"))
 		if _, err := handler.documents.Published("en", documentPath); err == nil {
-			return "/docs/en/" + strings.Join(segments[1:], "/")
+			return "/docs/en/" + documentPath
 		}
 	}
 	if len(segments) == 2 && segments[0] == "blog" && handler.blog != nil {

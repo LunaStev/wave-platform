@@ -1,0 +1,580 @@
+[
+  {
+    "id": "string-api",
+    "stdout": "2 6\n2 2\n"
+  },
+  {
+    "id": "reallocation",
+    "stdout": "7\n"
+  },
+  {
+    "id": "buffer-api",
+    "stdout": "3 33\n"
+  },
+  {
+    "id": "random-api",
+    "stdout": "filled=16\n"
+  },
+  {
+    "id": "duration-api",
+    "stdout": "1 500000000\n1500000000\n"
+  },
+  {
+    "id": "path-api",
+    "stdout": "data/input.txt\n"
+  },
+  {
+    "id": "math-api",
+    "stdout": "4 9\n"
+  },
+  {
+    "id": "variant-api",
+    "stdout": "value=42\n"
+  },
+  {
+    "id": "input-calculator",
+    "stdout": "total=3600\n",
+    "stdin": "3 1200\n",
+    "runs": [
+      {
+        "stdin": "0 1200\n",
+        "stdout": "out of range\n",
+        "exit": 1
+      }
+    ]
+  },
+  {
+    "id": "file-reader",
+    "stdout": "bytes=5 LF=1\n",
+    "files": {
+      "input.txt": "Wave\n"
+    }
+  },
+  {
+    "id": "binary-message",
+    "stdout": "kind=7 value=300 bytes=4\npreserved=0 99\n"
+  },
+  {
+    "id": "tcp-client",
+    "stdout": null,
+    "mode": "check"
+  },
+  {
+    "id": "reject-string-nul",
+    "mode": "reject",
+    "diagnostic": "NUL bytes are not allowed"
+  },
+  {
+    "id": "reject-wide-char",
+    "mode": "reject",
+    "diagnostic": "unsigned 8-bit char"
+  },
+  {
+    "id": "reject-shift-count",
+    "mode": "reject",
+    "diagnostic": "shift count must be"
+  },
+  {
+    "id": "reject-main-argument",
+    "mode": "reject",
+    "diagnostic": "main",
+    "stdout": null
+  },
+  {
+    "id": "never-function",
+    "stdout": ""
+  },
+  {
+    "id": "layout-api",
+    "stdout": "4 4\n"
+  },
+  {
+    "id": "install-stdlib",
+    "stdout": "Wave: 4 bytes\n"
+  },
+  {
+    "id": "library-import",
+    "stdout": "4\n"
+  },
+  {
+    "id": "book-hello",
+    "stdout": "Hello, Wave!\n"
+  },
+  {
+    "id": "book-sequence",
+    "stdout": "start\nworking\ndone\n"
+  },
+  {
+    "id": "book-print-lines",
+    "stdout": "Wave study\nsecond line\n"
+  },
+  {
+    "id": "book-format-first",
+    "stdout": "2 + 3 = 5\n"
+  },
+  {
+    "id": "book-exit-success",
+    "stdout": "completed\n"
+  },
+  {
+    "id": "book-first-solution",
+    "stdout": "Learning Wave\nMy first program\nReady to calculate\n12 * 8 = 96\n"
+  },
+  {
+    "id": "book-variable-first",
+    "stdout": "price=1200\nquantity=3\ntotal=3600\n"
+  },
+  {
+    "id": "book-assignment-snapshot",
+    "stdout": "before recalculation=3600\nafter recalculation=6000\n"
+  },
+  {
+    "id": "book-update-variable",
+    "stdout": "9\n"
+  },
+  {
+    "id": "book-named-condition",
+    "stdout": "purchase allowed\n"
+  },
+  {
+    "id": "book-shadowing",
+    "stdout": "inner=15\ninner changed=16\nouter=10\n"
+  },
+  {
+    "id": "book-storage",
+    "stdout": "visit=1\nvisit=2\nlimit=3\n"
+  },
+  {
+    "id": "book-stock-solution",
+    "stdout": "stock=14 sold=6\n"
+  },
+  {
+    "id": "book-function-before",
+    "stdout": "1800 4500\n"
+  },
+  {
+    "id": "book-function-extract",
+    "stdout": "1800 4500\n"
+  },
+  {
+    "id": "book-function-trace",
+    "stdout": "before\ninside: 7\nafter: 14\n"
+  },
+  {
+    "id": "book-function-parameters",
+    "stdout": "standard=1800\nspecial=1500\n"
+  },
+  {
+    "id": "book-function-default",
+    "stdout": "1800\n1500\n"
+  },
+  {
+    "id": "book-function-value",
+    "stdout": "count=4 later=5\ncount=5\n"
+  },
+  {
+    "id": "book-function-paths",
+    "stdout": "0 0 8\n"
+  },
+  {
+    "id": "book-function-void",
+    "stdout": "positive=6\n"
+  },
+  {
+    "id": "book-function-program",
+    "stdout": "total=5400\ninvalid order\ninvalid order\n"
+  },
+  {
+    "id": "book-function-solution",
+    "stdout": "max=7\n0 6 10\n"
+  },
+  {
+    "id": "book-precedence",
+    "stdout": "14 20\n"
+  },
+  {
+    "id": "book-division",
+    "stdout": "boxes=3 remaining=2\nnegative quotient=-3\n"
+  },
+  {
+    "id": "book-division-conversion",
+    "stdout": "integer division lost the fraction\nfloating division kept the fraction\n"
+  },
+  {
+    "id": "book-comparisons",
+    "stdout": "eligible\nnot exactly the boundary\n"
+  },
+  {
+    "id": "book-short-circuit",
+    "stdout": "at least one true\n"
+  },
+  {
+    "id": "book-cast-chain",
+    "stdout": "300 -> 44 -> 44\n-1 255\n"
+  },
+  {
+    "id": "book-bool-conversion",
+    "stdout": "zero is false\ntwo is true\n"
+  },
+  {
+    "id": "book-bit-flags",
+    "stdout": "write enabled\nremaining=1\n"
+  },
+  {
+    "id": "book-shifts",
+    "stdout": "left=2\nright=-4 4\n"
+  },
+  {
+    "id": "book-expression-solution",
+    "stdout": "coins=2 remainder=37\n0 255 -1\n"
+  },
+  {
+    "id": "book-if-else",
+    "stdout": "bought, balance=800\n"
+  },
+  {
+    "id": "book-grade",
+    "stdout": "A\nB\nC\ninvalid\n"
+  },
+  {
+    "id": "book-while-countdown",
+    "stdout": "3\n2\n1\nfinished at 0\n"
+  },
+  {
+    "id": "book-for-sum",
+    "stdout": "sum=15\n"
+  },
+  {
+    "id": "book-loop-control",
+    "stdout": "12\n"
+  },
+  {
+    "id": "book-match-number",
+    "stdout": "ok\nmissing\nother\n"
+  },
+  {
+    "id": "book-loop-statistics",
+    "stdout": "count=5 total=30\n"
+  },
+  {
+    "id": "book-loop-solution",
+    "stdout": "30\n"
+  },
+  {
+    "id": "book-array-create",
+    "stdout": "first=70\nsecond=80\nlast=90\n"
+  },
+  {
+    "id": "book-array-update",
+    "stdout": "75 85 90\n"
+  },
+  {
+    "id": "book-array-sum",
+    "stdout": "total=300 average=75\n"
+  },
+  {
+    "id": "book-array-filter",
+    "stdout": "passed=3\n"
+  },
+  {
+    "id": "book-array-find",
+    "stdout": "found at 0\n"
+  },
+  {
+    "id": "book-array-copy",
+    "stdout": "original=1\ncopied=99\n"
+  },
+  {
+    "id": "book-array-solution",
+    "stdout": "max=9 first=1\n"
+  },
+  {
+    "id": "book-string-literals",
+    "stdout": "안녕하세요\nline one\nline two\nquote: \"Wave\"\n"
+  },
+  {
+    "id": "book-utf8-length",
+    "stdout": "ASCII=4\nKorean=3\nmixed=7\n"
+  },
+  {
+    "id": "book-string-compare",
+    "stdout": "same bytes\ncase differs\nname matches\n"
+  },
+  {
+    "id": "book-string-search",
+    "stdout": "first=2 missing=-1\nmatches=2\n"
+  },
+  {
+    "id": "book-string-trim-range",
+    "stdout": "start=2 end=6 bytes=4\n"
+  },
+  {
+    "id": "book-binary-not-string",
+    "stdout": "65\n0\n66\n"
+  },
+  {
+    "id": "book-string-solution",
+    "stdout": "Wave source file\nWave test file\nother file\n"
+  },
+  {
+    "id": "book-struct-first",
+    "stdout": "1500 2\n"
+  },
+  {
+    "id": "book-struct-function",
+    "stdout": "3000\n4500\n"
+  },
+  {
+    "id": "book-struct-method",
+    "stdout": "3\n"
+  },
+  {
+    "id": "book-enum-state",
+    "stdout": "ready\nrunning\n"
+  },
+  {
+    "id": "book-variant-result",
+    "stdout": "value=4\nerror=1\n"
+  },
+  {
+    "id": "book-variant-empty",
+    "stdout": "missing\n"
+  },
+  {
+    "id": "book-model-solution",
+    "stdout": "accepted=87\n"
+  },
+  {
+    "id": "book-pointer-first",
+    "stdout": "value=42\nthrough pointer=42\nchanged=99\n"
+  },
+  {
+    "id": "book-pointer-reassign",
+    "stdout": "10 25\n"
+  },
+  {
+    "id": "book-pointer-increment",
+    "stdout": "6\n"
+  },
+  {
+    "id": "book-pointer-null",
+    "stdout": "no value\ncount=8\n"
+  },
+  {
+    "id": "book-pointer-array",
+    "stdout": "10\n20\n30\n"
+  },
+  {
+    "id": "book-pointer-range",
+    "stdout": "first two=6\nall=20\n"
+  },
+  {
+    "id": "book-pointer-alias",
+    "stdout": "9 9\n"
+  },
+  {
+    "id": "book-pointer-swap",
+    "stdout": "8 3\n8\n"
+  },
+  {
+    "id": "book-alloc-lifecycle",
+    "stdout": "42 0\n"
+  },
+  {
+    "id": "book-alloc-typed",
+    "stdout": "1 2 3\n"
+  },
+  {
+    "id": "book-alloc-grow",
+    "stdout": "7 9\n"
+  },
+  {
+    "id": "book-buffer-progressive",
+    "stdout": "bytes=11\n"
+  },
+  {
+    "id": "book-module-two-files",
+    "stdout": "42\n",
+    "files": {
+      "helpers.wave": "pub fun double(value: i32) -> i32 {\n    return value * 2;\n}\n"
+    }
+  },
+  {
+    "id": "book-module-alias",
+    "stdout": "4\n"
+  },
+  {
+    "id": "book-generic-identity",
+    "stdout": "42 Wave\n"
+  },
+  {
+    "id": "book-generic-minimum",
+    "stdout": "4 20\n"
+  },
+  {
+    "id": "book-generic-pair",
+    "stdout": "7 seven\n"
+  },
+  {
+    "id": "book-module-solution",
+    "stdout": "9 25\n",
+    "files": {
+      "math.wave": "pub fun square(value: i32) -> i32 {\n    return value * value;\n}\n"
+    }
+  },
+  {
+    "id": "book-error-result",
+    "stdout": "value=0\n"
+  },
+  {
+    "id": "book-error-codes",
+    "stdout": "quantity is too large\n"
+  },
+  {
+    "id": "book-error-variant",
+    "stdout": "out of range: 300\n"
+  },
+  {
+    "id": "book-error-early-return",
+    "stdout": "total=3600\ninvalid quantity\ninvalid price\n"
+  },
+  {
+    "id": "book-error-cleanup",
+    "stdout": "status=2\n"
+  },
+  {
+    "id": "book-error-solution",
+    "stdout": "value=0\nout of bounds\n"
+  },
+  {
+    "id": "book-async-basic",
+    "stdout": "42\n"
+  },
+  {
+    "id": "book-async-lazy",
+    "stdout": "before=0\nafter=1 result=7\n"
+  },
+  {
+    "id": "book-async-nested",
+    "stdout": "42\n"
+  },
+  {
+    "id": "book-async-spawn",
+    "stdout": "60\n"
+  },
+  {
+    "id": "book-async-solution",
+    "stdout": "25\n"
+  },
+  {
+    "id": "book-buffer-length-capacity",
+    "stdout": "reserved length=0\nresized length=3 first=7\ncleared length=0\n"
+  },
+  {
+    "id": "book-buffer-zero-bounds",
+    "stdout": "stored=0\noutside, preserved=99\n"
+  },
+  {
+    "id": "book-buffer-sum",
+    "stdout": "sum=45\n"
+  },
+  {
+    "id": "book-bytes-endian",
+    "stdout": "be=258 le=513\n"
+  },
+  {
+    "id": "book-bytes-short-read",
+    "stdout": "position=0 value=99\n"
+  },
+  {
+    "id": "book-leb128-space",
+    "stdout": "position=0 byte=85\n"
+  },
+  {
+    "id": "book-file-stream",
+    "stdout": "Wave\nbytes=5\n",
+    "files": {
+      "input.txt": "Wave\n"
+    }
+  },
+  {
+    "id": "book-file-capacity",
+    "stdout": "destination too small\n",
+    "files": {
+      "input.txt": "Wave\n"
+    }
+  },
+  {
+    "id": "book-file-write-append",
+    "stdout": "bytes=10\n"
+  },
+  {
+    "id": "book-string-empty-search",
+    "stdout": "empty find=0\nempty count=0\nnonoverlapping=2\nempty needle is contained\n"
+  },
+  {
+    "id": "book-trim-copy",
+    "stdout": "Wave\n"
+  },
+  {
+    "id": "book-memory-size-check",
+    "stdout": "bytes=12\noverflow rejected\n"
+  },
+  {
+    "id": "book-memory-overlap",
+    "stdout": "1\n1\n2\n3\n4\n"
+  },
+  {
+    "id": "book-math-rounding",
+    "stdout": "truncate=-2 floor=-3 ceil=-2\nabsolute value is outside i32\n"
+  },
+  {
+    "id": "book-duration-add",
+    "stdout": "1s 550000000ns\n1550ms\n"
+  },
+  {
+    "id": "book-path-parts",
+    "stdout": "directory=data\nfilename=report.txt\n"
+  },
+  {
+    "id": "book-env-setting",
+    "stdout": null,
+    "mode": "check"
+  },
+  {
+    "id": "book-random-boundaries",
+    "stdout": "empty request succeeded\nmissing buffer rejected\n"
+  },
+  {
+    "id": "book-task-yield",
+    "stdout": "started\nresumed\nresult=42\n"
+  },
+  {
+    "id": "book-resolve-numeric",
+    "stdout": "address ready\n"
+  },
+  {
+    "id": "book-resolve-table",
+    "stdout": "matched=1\n"
+  },
+  {
+    "id": "book-calculator-discount",
+    "stdout": "total=3240\n",
+    "stdin": "3 1200 10\n",
+    "runs": [
+      {
+        "stdin": "3 1200 101\n",
+        "stdout": "invalid discount\n",
+        "exit": 3
+      },
+      {
+        "stdin": "1000 100000 0\n",
+        "stdout": "total=100000000\n"
+      }
+    ]
+  },
+  {
+    "id": "book-ref-recursion",
+    "stdout": "120\n"
+  }
+]

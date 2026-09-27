@@ -3,7 +3,10 @@
 // from the platform server while still allowing the server to embed it.
 package wavedoc
 
-import "embed"
+import (
+	"embed"
+	"encoding/json"
+)
 
 var SupportedLocales = []string{"en", "ko", "ja", "zh", "es", "de", "ru", "id", "vi"}
 
@@ -19,4 +22,24 @@ func SupportsLocale(locale string) bool {
 		}
 	}
 	return false
+}
+
+// RedirectData is shared with the browser so moved documentation has one URL map.
+//
+//go:embed redirects.json
+var RedirectData []byte
+
+var DocumentRedirects = func() map[string]string {
+	var paths map[string]string
+	if err := json.Unmarshal(RedirectData, &paths); err != nil {
+		panic(err)
+	}
+	return paths
+}()
+
+func CanonicalDocumentPath(path string) string {
+	if target, ok := DocumentRedirects[path]; ok {
+		return target
+	}
+	return path
 }

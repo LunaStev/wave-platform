@@ -3,46 +3,55 @@ translation_set_id: whale-overview
 path: whale/overview
 locale: en
 group: whale
-group_order: 5
+group_order: 1
 order: 1
 title: Whale documentation
-summary: Toolchain components, available commands, and reference manuals.
+summary: Guide to toolchain components, available commands and reference documentation.
 ---
 
 ## Introduction
 
-Whale is a general-purpose compiler toolchain for language implementers and compiler tools. It provides a typed intermediate representation (IR), an AMD64 assembler, an object-file library, and linker infrastructure. The components are exposed as Rust libraries and through the `whale` command.
+Whale is a general-purpose compiler toolchain for programming language implementations and compiler tools. Provides typed intermediate expressions (IR), AMD64 assembler, object file library, and linker-based functions. Each component is used through the Rust library and the `whale` command.
 
-The IR specifies the meaning of computations independently of their machine encoding. The assembler encodes machine instructions and emits relocatable objects. The object library represents sections, symbols, and relocations. The linker resolves references between objects and lays out an executable.
+IR expresses the semantics of a computation independently of the machine language encoding. The assembler encodes machine instructions to create relocatable objects. Object libraries represent sections, symbols, and relocations. The linker resolves references between objects and places the executable file.
 
-## Using this manual
+## Build and use tools
 
-| Reference | Contents |
+|work|document|
 | --- | --- |
-| [IR reference](ir-reference) | Types, values, functions, control flow, validation, and interchange |
-| [Numeric operations](numeric-operations) | Integer arithmetic, shifts, conversions, and floating point |
-| [Memory model](memory-model) | Initialization, pointer validity, address calculation, layout, and strings |
-| [O0 and debugging](o0-debugging) | Preserved computations, variable storage, and debug information |
-| [AMD64 target](amd64-target) | Target identity, calling conventions, and native feature limits |
-| [Assembler and linker](assembler-linker) | Assembly operands, sections, symbols, and static linking |
+|What each tool does| [Toolchain components](/docs/en/whale/ecosystem) |
+|Wave Program build/link/target selection| [Build and Link](/docs/en/whale/build-link-targets) |
+|Package/dependency management| [Vex](/docs/en/whale/vex-package-manager) |
+|Whale Execute command| [Whale CLI](/docs/en/whale/whale-cli) |
 
-These references specify Whale semantics. Feature availability is listed below; describing an operation in the reference does not make it available in every build.
+## Document Guide
 
-## Feature availability
+|reference document|content|
+| --- | --- |
+| [See IR](ir-reference) |Types, values, functions, control flow, validation, exchange formats|
+| [Numeric operations](numeric-operations) |Integer arithmetic, shift, type conversion, floating point|
+| [Memory model](memory-model) |Initialization, pointer validation, address calculation, layout, strings|
+| [Debugging with O0](o0-debugging) |Computation retention, variable storage, debug information|
+| [AMD64 Target](amd64-target) |Target identifier, calling convention, native scope of function|
+| [Assembler and Linker](assembler-linker) |Assembly operands, sections, symbols, static links|
 
-| Component | Available interface | Limitations |
+The reference document defines the semantic rules for Whale. Available features follow the table below. The operations described in the reference documentation may not be available in all builds.
+
+## Support status
+
+|component|Interface provided|limit|
 | --- | --- | --- |
-| Assembler | AMD64 assembly to ELF64 relocatable objects | Instruction and directive coverage is incomplete |
-| Object library | Object construction, sparse BSS, target validation, and checked AMD64 ELF64 serialization with an optional Wave record implementation | A relocatable object is not an executable |
+|assembler|Create ELF64 relocatable object from assembly AMD64|Incomplete coverage of commands and directives|
+|object library|Object composition, payload without BSS, target validation, AMD64 ELF64 serialization and selectable Wave record implementation to check size.|Relocatable objects are not executables|
 | IR | Construction, printing, signature-checked direct/indirect calls, versioned AST lowering, target validation and checked type layouts | AST/typed IR format 2 and bit-exact constants are available; typed IR parsing and machine call emission remain unavailable |
-| Linker | Symbol resolution, input target validation, and checked file/memory section layout | Complete relocation application and executable output are unavailable |
-| Execution and debugging | Semantic requirements described in this manual | IR interpretation, end-to-end native code generation, tracked-memory runtime checks, and DWARF emission are not yet available |
+|linker|Symbol interpretation, input target verification, file/memory section placement inspection|Applying full relocation and outputting executable files are not supported.|
+|Running and Debugging|Semantic rules defined in this document|IR interpreter, complete native code generation, runtime inspection of trace memory, DWARF output not supported|
 
-The no-undefined-behavior rules apply to verified IR and tracked memory. The experimental implementation does not yet provide the complete runtime enforcement described by the memory and execution references.
+Rules prohibiting undefined behavior apply to verified IR and trace memories. The experimental implementation does not yet implement all of the runtime checks in the memory/execution reference documentation.
 
-## Build and assemble
+## Build and Assemble
 
-Build with Rust 1.86.0 or newer:
+Build with Rust 1.86.0 or higher.
 
 ```sh
 git clone https://github.com/wavefnd/Whale.git
@@ -50,7 +59,7 @@ cd Whale
 cargo build --release --locked
 ```
 
-Save this assembly as `answer.asm`:
+Save the following assembly as `answer.asm`.
 
 ```asm
 section .text
@@ -61,18 +70,18 @@ answer:
     ret
 ```
 
-Create an ELF64 object:
+Create an object ELF64.
 
 ```sh
 ./target/release/whale asm --amd64 answer.asm -o answer.o
 ```
 
-Assembly uses Whale's own assembler; no external assembler is required. The output contains a callable function, not process startup code.
+It uses Whale's own assembler, so no external assembler is required. The output contains a callable function and does not contain any process startup code.
 
-To enable the experimental AST-to-IR command, build with `--features socket-cli`. See the [command reference](/docs/en/toolchain/whale-cli) for commands available in the CLI.
+The experimental AST→IR commands are available by building with `--features socket-cli`. For the command of CLI, refer to [Command Reference](/docs/en/whale/whale-cli).
 
-## Library use and diagnostics
+## Library usage and diagnosis
 
-Validate IR before execution or code generation. Input errors and builder misuse are reported as structured errors; a library input error must not terminate the host process or overwrite existing content. Resource limits must be configurable for tools that accept untrusted input.
+IR must be verified before execution or code generation. Input errors and misuse of builder will return structural errors. Input errors in the library must not terminate the host process or overwrite existing content. Tools that accept untrusted input should be able to adjust resource limits.
 
-Artifact generation is required to be deterministic for the same toolchain version, input, target, and settings. Distribution metadata identifies the version, commit, and available features. CI coverage includes accepted and rejected inputs, traps, O0 preservation, round trips, and native semantics as those interfaces become available. See [Contributing to Whale](https://github.com/wavefnd/Whale/blob/master/CONTRIBUTING.md) for development and validation commands.
+The same toolchain version, input, target, and configuration should produce deterministic output. The distribution's metadata identifies the version·commit·and the available features. CI checks for good input, input to reject, trap, O0 retention, round-trip, native execution semantics for each interface. For development/verification commands, please refer to [Whale Contribution Information](https://github.com/wavefnd/Whale/blob/master/CONTRIBUTING.md).

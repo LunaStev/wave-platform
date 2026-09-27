@@ -2,57 +2,34 @@
 translation_set_id: system-io
 path: reference/system-io-network-process
 locale: en
-group: reference
-group_order: 3
-order: 6
-title: System I/O, files, networking, and processes
-summary: FD-based I/O, file systems, sockets/TCP/UDP, process APIs, and their failure contracts.
+group: stdlib
+group_order: 1
+order: 15
+title: System functions and processes
+summary: Describes the boundary and process lifetime of the parent API and OS interfaces.
 ---
 
-## Opening and closing files
+## Documentation by function
 
-```wave
-import("std::fs::file")::{fs_open_read, fs_close};
+Read [fs and io](/docs/en/stdlib/files-io) to handle the file, [TCP](/docs/en/stdlib/tcp) to link, and [resolver](/docs/en/stdlib/resolution) to look up the address. Below are the process and lower level OS access rules.
 
-fun main() {
-    var fd: i64 = fs_open_read("input.txt");
-    if (fd >= 0) {
-        fs_close(fd);
-    }
-}
+## Process Basics API
+
+```text
+std::process::core
+proc_exit(code: i32) -> !
+proc_getpid() -> i64
+proc_getppid() -> i64
+proc_execve(path: str, argv: ptr<ptr<i8>>, envp: ptr<ptr<i8>>) -> i64
+proc_waitpid_raw(pid: i64, status: ptr<i32>, options: i32) -> i64
 ```
 
-`fs_open_read` can preserve a negative failure result, so check it before use. `fs_close` also returns a result; code that cares about close failures should inspect it.
+`proc_exit` does not return to the call point. Please perform any necessary file/memory cleanup before shutdown. `proc_execve` differs from a typical child creation function because, if successful, it replaces the existing process image. raw argv/envp must be prepared for the NUL termination of each string, with the null pointer indicating the end.
 
-## std::io
+The spawn function in `std::process::spawn` handles the creation result, and the await function handles the exit status of the child. Successful creation and successful termination of the program are two different things. When you create a pipe, the parent and child must close the unused end so that EOF is passed. If you wait for the child to exit without reading the capture pipe, the buffer may fill up and wait for each other.
 
-`std::io` provides file-descriptor operations for reading, writing, exact-length transfers, seeking, and copying. APIs that accept buffers require the pointer and length to be kept in the same unit and contract.
+## Portability and low-level approach
 
-## std::fs
+fork/exec, file descriptor, and Windows handle are not the same OS function. Verify support for the selected target and treat unsupported as a normal failure path. `std::sys` is a OS-specific interface and does not reuse its numeric flags and layout from other OS.
 
-`std::fs::file` includes helpers for existence checks, opening, closing, size queries, removing files, creating/removing directories, complete reads/writes, and file copying.
-
-```wave
-var size: i64 = fs_file_size("input.txt");
-if (size < 0) {
-    println("file error");
-}
-```
-
-## Networking
-
-`std::net` is divided into address handling, base sockets, socket options, polling, TCP, and UDP. Network code should explicitly manage:
-
-- Address family and socket type
-- Port/integer byte order
-- Blocking versus non-blocking state
-- Partial reads and writes
-- Shutdown and error results
-
-## Processes
-
-`std::process` provides source units for process creation, waiting, constants, and standard-stream redirection. Treat successful process creation and the child's eventual exit status as separate results.
-
-## Platform dependence
-
-These modules cross the operating-system boundary through `std::sys` and native calls. Error values, flags, and some structures follow the selected operating system and ABI, so platform-dependent programs should make that target explicit and test it directly.
+When linking directly with the external C library, please read [FFI](/docs/en/language/modules-imports-and-ffi). There is no need to arbitrarily declare the function libc to use the parent std API. Check [Target and Link Environment](/docs/en/whale/build-link-targets) first.

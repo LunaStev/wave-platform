@@ -2,51 +2,54 @@
 translation_set_id: standard-library
 path: reference/standard-library
 locale: en
-group: reference
-group_order: 3
+group: stdlib
+group_order: 1
 order: 1
-title: Standard library index
-summary: The top-level Wave standard-library modules, import paths, API discovery, and platform boundaries.
+title: Standard library guide
+summary: How to find a module that suits your purpose and read the errors and ownership rules of the function.
 ---
 
-## Top-level modules
+## Find the features you need
 
-The Wave standard library contains these top-level modules:
+The standard library is import with the path `std::module::file`. Even if the names are similar, functions may return errors in different ways. First read [API How to read](/docs/en/stdlib/contracts), then go to the module you need in the following table.
 
-| Area | Modules | Representative purpose |
+|What I want to do|document|Main import|
 | --- | --- | --- |
-| Strings and data | `string`, `bytes`, `buffer` | String operations, endian/byte helpers, growable buffers |
-| Math | `math` | Integer and mathematical helpers |
-| Memory and C boundary | `mem`, `libc` | Manual memory and C runtime bindings |
-| Files and I/O | `io`, `fs` | File descriptors, files, and directories |
-| Networking | `net` | Addresses, sockets, polling, TCP, UDP |
-| Environment, paths, time | `env`, `path`, `time` | Environment variables, paths, time operations |
-| System and processes | `sys`, `process` | OS boundaries, process creation and waiting |
+|String length/comparison/search| [string](/docs/en/reference/string-and-bytes) | `std::string::len`, `cmp`, `find`, `trim` |
+|Memory allocation/copy/size| [mem](/docs/en/reference/memory-and-buffer) | `std::mem::alloc`, `ops`, `layout` |
+|List of bytes of varying size| [buffer](/docs/en/stdlib/buffer) | `std::buffer::alloc`, `read`, `write` |
+|Binary read/write| [bytes](/docs/en/stdlib/bytes) | `std::bytes::types`, `cursor`, `leb128` |
+|File·Descriptor I/O| [fs and io](/docs/en/stdlib/files-io) | `std::fs::file`, `std::io::fd` |
+|Path combination/environment settings| [path and env](/docs/en/stdlib/path-env) | `std::path::copy`, `std::env::environ` |
+|Time measurement/waiting| [time](/docs/en/stdlib/time) | `std::time::duration`, `clock`, `sleep` |
+|Numerical address/name list search| [net.resolve](/docs/en/stdlib/resolution) | `std::net::resolve`, `resolve_table` |
+|TCP Connection/Transmission| [net.tcp](/docs/en/stdlib/tcp) | `std::net::tcp`, `address`, `error` |
+|OS Random number| [random](/docs/en/stdlib/random) | `std::random::fill` |
+|Process·OS Boundary| [system function](/docs/en/reference/system-io-network-process) | `std::process::core`, `spawn`, `std::sys` |
+|Asynchronous task execution| [task](/docs/en/stdlib/task) | `std::task` |
+|Mathematics/Diagnosis Assistant| [math and debug](/docs/en/stdlib/math-debug) | `std::math::int`, `float`, `std::debug::core` |
 
-## Import granularity
+## Example of first use
 
-Imports normally identify the specific `.wave` source unit that defines the API you need, rather than only the top-level module name.
+The program below uses one function from std without downloading a separate package. Save it as `main.wave` and run it as `wavec run main.wave`.
 
+<!-- wave-example: library-import -->
 ```wave
-import("std::string::len")::{len, is_empty};
-import("std::fs::file")::{fs_open_read, fs_close};
-import("std::mem::alloc")::{mem_alloc, mem_free};
+import("std::string::len")::{
+    len
+};
+
+fun main() {
+    println("{}", len("Wave"));
+}
 ```
 
-The selective form makes the named public declarations available without a namespace prefix. A plain `import("std::string::len");` instead exposes them through the `std::string::len` namespace.
+The result is `4`. To understand the same example step by step, read [Strings](/docs/en/language/strings).
 
-## Finding APIs
+## Compatible with compiler std
 
-The standard library is distributed as Wave source. Locate it with:
+Confirm the selected path with `wavec print std-path`. When using std from another checkout, specify the path as `wavec --std-root /absolute/path/to/std check main.wave`. If the specified path is invalid or incompatible, an error will be displayed.
 
-```shell
-wavec print std-path
-```
+## platform border
 
-Open a module's `.wave` files to inspect its public signatures, return contracts, and lower-level imports.
-
-## Platform boundaries
-
-APIs under modules such as `sys`, `libc`, `fs`, `net`, and `process` often preserve platform-style failure results, including negative error values. Do not assume success; inspect and handle each function's return contract.
-
-Use the standard library installed with the compiler so its modules and compiler agree on their language and ABI contracts.
+Distinguish between computational functions such as string/byte and OS functions such as file/socket. Recognizing a target does not guarantee that all hosts API will be provided. Read the platform entries for [Support target](/docs/en/whale/build-link-targets) and each API together. `std::sys` is a lower-level interface and portable programs will use the higher-level module first.

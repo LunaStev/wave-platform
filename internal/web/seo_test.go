@@ -15,6 +15,7 @@ import (
 	blogdomain "github.com/wavefnd/wave-platform/internal/blog"
 	documentdomain "github.com/wavefnd/wave-platform/internal/document"
 	"github.com/wavefnd/wave-platform/internal/storage"
+	"github.com/wavefnd/wave-platform/wavedoc"
 )
 
 func TestBlogMetadataUsesPublishedPostData(t *testing.T) {
@@ -176,21 +177,18 @@ func TestDocumentationSEOUsesCanonicalLocalePaths(t *testing.T) {
 	}
 	seo := NewSEOHandler("https://wave.example", documentdomain.NewRepository(database), nil, nil, nil, nil)
 
-	metadata := seo.HTMLMetadata(httptest.NewRequest(http.MethodGet, "/docs/ko/language/explicit-memory-type-model", nil))
-	if !strings.Contains(metadata, `rel="canonical" href="https://wave.example/docs/ko/language/explicit-memory-type-model"`) {
-		t.Fatalf("localized canonical is missing: %s", metadata)
+	for _, locale := range wavedoc.SupportedLocales {
+		path := "/docs/" + locale + "/language/explicit-memory-type-model"
+		metadata := seo.HTMLMetadata(httptest.NewRequest(http.MethodGet, path, nil))
+		if !strings.Contains(metadata, `rel="canonical" href="https://wave.example`+path+`"`) {
+			t.Fatalf("%s localized canonical is missing", locale)
+		}
+		article := graphNode(t, metadataGraph(t, metadata), "TechArticle")
+		if article["inLanguage"] != locale || article["dateModified"] == "" {
+			t.Fatalf("%s localized article schema = %#v", locale, article)
+		}
 	}
-	article := graphNode(t, metadataGraph(t, metadata), "TechArticle")
-	if article["inLanguage"] != "ko" || article["dateModified"] == "" {
-		t.Fatalf("localized article schema = %#v", article)
-	}
-	japanese := seo.HTMLMetadata(httptest.NewRequest(http.MethodGet, "/docs/ja/language/explicit-memory-type-model", nil))
-	if !strings.Contains(japanese, `rel="canonical" href="https://wave.example/docs/ja/language/explicit-memory-type-model"`) {
-		t.Fatalf("Japanese localized canonical is missing: %s", japanese)
-	}
-	if graphNode(t, metadataGraph(t, japanese), "TechArticle")["inLanguage"] != "ja" {
-		t.Fatal("Japanese article schema must identify its content language")
-	}
+	archiveSEOTranslation(t, database, "zh", "language/explicit-memory-type-model")
 
 	fallback := seo.HTMLMetadata(httptest.NewRequest(http.MethodGet, "/docs/zh/language/explicit-memory-type-model", nil))
 	if !strings.Contains(fallback, `rel="canonical" href="https://wave.example/docs/en/language/explicit-memory-type-model"`) {
