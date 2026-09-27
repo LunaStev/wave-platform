@@ -194,6 +194,8 @@ ELF writers reject overflow and field-width truncation. Extended section numberi
 
 Functions and variables use separate identities inside the IR. External linking uses explicit `link_name` values supplied by the frontend. Whale preserves those names rather than automatically renaming one of two colliding exports.
 
+The IR declaration table records typed `FunctionId` references and explicit function `link_name` values. The assembler/object/linker APIs below remain separate interfaces: native IR emission does not yet carry those identities through to the final link. IR call verification alone does not establish this end-to-end property.
+
 Consequently, an internal function and variable may both be named `item`, but exporting both under the same external name can still be an error. Distinct internal namespaces do not create distinct external namespaces automatically.
 
 Object-local symbols are scoped to their input object. Global symbols participate in resolution across objects. A confirmed function/data collision is an error. A NOTYPE symbol remains compatible with inputs that do not provide a more specific type; the absence of a type is not proof that a symbol denotes a function or data.

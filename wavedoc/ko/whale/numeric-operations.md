@@ -34,12 +34,15 @@ overflow에서 실행을 중단하는 언어의 프런트엔드는 checked 연�
 
 ```text
 module {
-  format_version 1
+  format_version 2
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
 
-  fn @add_u8() -> u8 {
+  declare @f0 "add_u8": whale () -> u8, linkage internal
+  declare @f1 "require_no_overflow": whale () -> u8, linkage internal
+
+  fn @add_u8() -> u8, id @f0 {
   entry:
     %v0: u8 = const u8 255
     %v1: u8 = const u8 1
@@ -47,7 +50,7 @@ module {
     ret u8 %v2
   }
 
-  fn @require_no_overflow() -> u8 {
+  fn @require_no_overflow() -> u8, id @f1 {
   entry:
     %v3: u8 = const u8 255
     %v4: u8 = const u8 1

@@ -50,12 +50,14 @@ return·break·continue 뒤의 문장도 연결되지 않은 블록에 남습니
 
 ```text
 module {
-  format_version 1
+  format_version 2
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
 
-  fn @preserved() -> void {
+  declare @f0 "preserved": whale () -> void, linkage internal
+
+  fn @preserved() -> void, id @f0 {
   entry:
     %v0: i32 = const i32 1
     %v1: i32 = const i32 2

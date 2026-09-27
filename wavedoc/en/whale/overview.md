@@ -34,7 +34,7 @@ These references specify Whale semantics. Feature availability is listed below; 
 | --- | --- | --- |
 | Assembler | AMD64 assembly to ELF64 relocatable objects | Instruction and directive coverage is incomplete |
 | Object library | Object construction, sparse BSS, target validation, and checked AMD64 ELF64 serialization with an optional Wave record implementation | A relocatable object is not an executable |
-| IR | Construction, printing, verification, and scalar AST lowering, validated target selection, and checked type layouts | Versioned scalar AST JSON and bit-exact constants are available; typed IR text parsing remains unavailable |
+| IR | Construction, printing, signature-checked direct/indirect calls, versioned AST lowering, target validation and checked type layouts | AST/typed IR format 2 and bit-exact constants are available; typed IR parsing and machine call emission remain unavailable |
 | Linker | Symbol resolution, input target validation, and checked file/memory section layout | Complete relocation application and executable output are unavailable |
 | Execution and debugging | Semantic requirements described in this manual | IR interpretation, end-to-end native code generation, tracked-memory runtime checks, and DWARF emission are not yet available |
 

@@ -33,12 +33,14 @@ The following builder-produced module passes verification. Its `store` precedes 
 
 ```text
 module {
-  format_version 1
+  format_version 2
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
 
-  fn @initialized_local() -> i32 {
+  declare @f0 "initialized_local": whale () -> i32, linkage internal
+
+  fn @initialized_local() -> i32, id @f0 {
   entry:
     %v0: ptr<i32> = alloca i32, align 4
     %v1: i32 = const i32 42

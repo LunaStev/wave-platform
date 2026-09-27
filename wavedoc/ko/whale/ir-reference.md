@@ -43,12 +43,14 @@ fn main() {
 
 ```text
 module {
-  format_version 1
+  format_version 2
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
 
-  fn @answer() -> i32 {
+  declare @f0 "answer": whale () -> i32, linkage internal
+
+  fn @answer() -> i32, id @f0 {
   entry:
     %v0: i32 = const i32 40
     %v1: i32 = const i32 2
@@ -72,6 +74,7 @@ module {
 | `u1`, `u8`, `u16`, `u32`, `u64`, `u128` | 지정된 비트 폭의 부호 없는 정수 |
 | `f16`, `f32`, `f64` | 지정된 비트 폭의 부동소수점 값 |
 | `ptr<T>` | T 타입 값을 가리키는 포인터 |
+| `fnptr<signature>` | 정확한 매개변수·반환 타입과 호출 규약을 가진 함수 포인터 |
 | `array<T, N>` | 같은 타입의 원소 N개 |
 | `struct{T, ...}` | 순서가 있는 구조체 필드 |
 | `tuple<T, ...>` | 순서가 있는 튜플 원소 |
@@ -86,6 +89,90 @@ module {
 함수에는 전체 매개변수·결과 타입, 호출 규약, linkage를 명시합니다. 직접 호출과 간접 호출은 호출 대상의 서명과 일치해야 합니다. void 호출은 결과 ID가 없습니다. nonvoid 호출은 O0에서 결과를 사용하지 않더라도 결과 정의를 유지합니다.
 
 반환은 함수의 결과 타입과 일치해야 합니다. void 반환은 값을 전달하지 않으며, nonvoid 반환은 선언된 결과 타입의 값을 전달합니다.
+
+### 선언, 식별자와 호출
+
+`Module.declarations`는 함수의 `FunctionId`, 이름, 전체 서명, linkage와 외부 연결 이름을 보관합니다. 정의는 이 식별자를 참조하며 매개변수·반환 타입이 선언과 일치해야 합니다. `declare_function`은 동일한 반복 선언을 같은 ID로 해석하고, 충돌하는 선언과 중복 정의는 오류로 처리합니다. 내부 선언에는 같은 모듈의 본문이 필요합니다. 외부 선언은 링크할 때까지 미해결 상태이거나 공개할 본문을 가질 수 있습니다. 내부 함수에는 `link_name`이 없고, 외부 함수는 NUL이 없는 비어 있지 않은 이름을 명시해야 합니다. 서로 다른 함수 선언이 같은 외부 이름을 차지하면 오류입니다. 전역 변수와 함수의 내부 이름 공간은 구분됩니다.
+
+전방 호출·재귀 호출은 모든 선언을 먼저 등록한 뒤 `begin_declared_function`으로 본문을 만듭니다. `begin_function`은 새 내부 Whale 함수를 만드는 편의 API입니다. 검사형 API인 `declare_function`, `begin_declared_function`, `function_addr`, `null_function`, `call`은 `Result`를 반환하며, 거부된 호출은 명령이나 결과 ID를 추가하지 않습니다.
+
+다음 완전한 Rust 예제는 외부 함수를 선언하고 typed 주소를 얻어 직접 호출과 간접 호출을 모두 생성합니다.
+
+```rust
+use ir::{Callee, CallingConvention, DataLayout, FunctionSignature, Linkage, ModuleBuilder, Type};
+
+fn main() {
+    let mut module = ModuleBuilder::new("x86_64-whale-linux", DataLayout::default_64bit_le());
+    let signature = FunctionSignature {
+        params: vec![Type::I32], ret: Type::I32,
+        convention: CallingConvention::SysV64, variadic: false,
+    };
+    let identity = module.declare_function(
+        "identity", signature, Linkage::External, Some("identity_i32".into()),
+    ).unwrap();
+    let mut function = module.begin_function("answer", vec![], Type::I32);
+    let input = function.const_i32(42);
+    let callback = function.function_addr(identity).unwrap();
+    // 직접 호출의 결과는 사용하지 않아도 정의를 유지합니다.
+    function.call(Callee::Direct(identity), vec![input]).unwrap();
+    let result = function.call(Callee::Indirect(callback), vec![input]).unwrap().unwrap();
+    function.ret(Some(result));
+    function.finish();
+    let module = module.finish();
+    ir::verify_module(&module).unwrap();
+    print!("{}", ir::print_module(&module));
+}
+```
+
+```text
+module {
+  format_version 2
+  semantics_version 1
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  declare @f0 "identity": sysv64 (i32) -> i32, linkage external, link_name "identity_i32"
+  declare @f1 "answer": whale () -> i32, linkage internal
+
+  fn @answer() -> i32, id @f1 {
+  entry:
+    %v0: i32 = const i32 42
+    %v1: fnptr<sysv64 (i32) -> i32> = function_addr @f0
+    %v2: i32 = call sysv64 i32 @f0(%v0)
+    %v3: i32 = call sysv64 i32 indirect %v1(%v0)
+    ret i32 %v3
+  }
+
+}
+```
+
+`Callee::Direct(FunctionId)`는 선언 표를 참조하고, `Callee::Indirect(ValueId)`는 `Type::FnPtr(FunctionSignature)` 값을 요구합니다. 서명에는 모든 매개변수·반환 타입과 `CallingConvention::{Whale, SysV64}`가 포함됩니다. 복사, 저장, 매개변수, 반환, phi와 select를 거쳐도 서명을 보존합니다. 데이터 포인터와 정수는 호출할 수 없습니다. 함수 포인터 타입이 관련된 cast는 거부하며 타입 표기를 바꿔 호출 가능한 서명을 변경할 수 없습니다. 이 타깃에서 함수 포인터의 주소 저장 크기는 64비트지만, 이것만으로 실행 시 shadow metadata가 구현되지는 않습니다.
+
+인자 수, 정확한 인자·결과 타입, 결과 ID 유무와 호출 규약이 일치해야 하며 암묵적 변환은 없습니다. 간접 호출 대상도 인자와 마찬가지로 호출을 지배해야 합니다. `variadic: true`, void 매개변수, SysV64의 복합 매개변수·반환 서명은 거부합니다. Whale 복합 서명은 IR에서 표현할 수 있지만 두 규약 모두 native ABI 분류와 기계 호출 생성은 아직 제공하지 않습니다.
+
+`null_function(signature)`는 서명을 가진 null 함수 포인터입니다. 이를 호출하는 IR은 타입상 유효하며 실행 시 callee 진입 전에 반드시 trap해야 합니다. null이 아니어도 잘못되었거나 수명이 끝났거나 검사한 서명과 호환되지 않는 대상은 trap해야 합니다. 이 실행 검사와 외부 콜백 수명 관리는 interpreter·native 실행 계층의 후속 기능입니다. 검증을 통과했다고 임의의 외부 주소가 안전해지는 것은 아닙니다.
+
+### AST 호출 형태
+
+다음은 AST 형식 2 프로그램 안에 넣는 표현식 조각입니다.
+
+```json
+{"Call":{"callee":{"Direct":"increment"},"args":[{"Lit":{"Int":{"bits":32,"signed":true,"value":"41"}}}]}}
+```
+
+```json
+{"Call":{"callee":{"Indirect":{"FunctionRef":"increment"}},"args":[{"Lit":{"Int":{"bits":32,"signed":true,"value":"41"}}}]}}
+```
+
+`Direct`와 `FunctionRef`는 같은 이름의 변수가 있어도 함수 이름 공간에서 찾습니다. `Indirect`는 대상 표현식을 먼저 평가하고 인자를 왼쪽부터 평가합니다. void 호출은 `ExprStmt`에 사용할 수 있지만 변수 초기값·인자·피연산자·반환값으로 사용할 수 없습니다. 호출과 함수 참조는 컴파일 타임 수치 상수식이 아닙니다. `NullFunction`은 `params`, `ret`, `convention`, `variadic` 필드를 가진 서명 객체를 받습니다.
+
+[완전한 JSON 예제](https://github.com/wavefnd/Whale/blob/master/ir/tests/fixtures/ast-v2-calls.json)는 콜백을 저장한 뒤 간접 호출하고 외부 함수를 호출합니다. 다음 명령으로 lowering합니다.
+
+```sh
+cargo run --locked --features socket-cli -- ir lower ir/tests/fixtures/ast-v2-calls.json
+```
+
+[예상 IR](https://github.com/wavefnd/Whale/blob/master/ir/tests/fixtures/calls-v2.wir)은 lowering 테스트에서 비교합니다. 함수 식별자와 연결 이름은 IR 경계에서 표현하며, native 오브젝트 생성·링크까지 보존하는 작업은 별도입니다.
 
 ## 블록과 값의 사용 가능성
 
@@ -128,11 +215,11 @@ AST와 typed IR은 각각의 format version과 공통 semantics version을 사�
 
 ### 버전이 명시된 AST JSON
 
-다음을 `program.json`으로 저장합니다. Envelope의 네 필드는 모두 필수입니다. `program`의 `globals`와 `functions` 배열도 필수이며 빈 배열을 허용합니다. 함수의 이름·매개변수·반환 타입·본문은 필수입니다. 각 enum은 unit 이름 또는 variant 키 하나를 가진 객체로 표현합니다. Unit variant는 `{"Void":null}`처럼 null 값을 가진 객체도 허용하며, encoder는 unit 이름 `"Void"`로 출력합니다. `VarDecl.init`은 생략하거나 null로 지정할 수 있으며 다른 필수 필드는 생략할 수 없습니다.
+다음을 `program.json`으로 저장합니다. Envelope의 네 필드는 모두 필수입니다. `program`의 `declarations`, `globals`, `functions` 배열도 필수이며 빈 배열을 허용합니다. 함수의 이름·매개변수·반환 타입·본문과 `convention`, `linkage`는 필수입니다. 내부 함수의 `link_name`은 생략하거나 null로 지정하며, 외부 함수는 NUL이 없는 비어 있지 않은 문자열로 명시합니다. 각 enum은 unit 이름 또는 variant 키 하나를 가진 객체로 표현합니다. Unit variant는 `{"Void":null}`처럼 null 값을 가진 객체도 허용하며, encoder는 unit 이름 `"Void"`로 출력합니다. `VarDecl.init`은 생략하거나 null로 지정할 수 있으며 다른 필수 필드는 생략할 수 없습니다.
 
 ```json
 {
-  "format_version": 1,
+  "format_version": 2,
   "semantics_version": 1,
   "features": [],
   "program": {
@@ -159,9 +246,13 @@ AST와 typed IR은 각각의 format version과 공통 semantics version을 사�
               }
             }
           }
-        ]
+        ],
+        "convention": "Whale",
+        "linkage": "Internal",
+        "link_name": null
       }
-    ]
+    ],
+    "declarations": []
   }
 }
 ```
@@ -172,12 +263,14 @@ cargo run --locked --features socket-cli -- ir lower program.json
 
 ```text
 module {
-  format_version 1
+  format_version 2
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
 
-  fn @answer() -> u128 {
+  declare @f0 "answer": whale () -> u128, linkage internal
+
+  fn @answer() -> u128, id @f0 {
   entry:
     %v0: u128 = const u128 340282366920938463463374607431768211455
     ret u128 %v0
@@ -188,18 +281,27 @@ module {
 
 정수 `value`는 10진 문자열입니다. Signed 정수의 선택적인 마이너스 뒤에 숫자를 쓰며 공백·플러스·지수·구분자는 허용하지 않습니다. 허용 범위는 선언한 폭과 signedness로 결정합니다. 위의 `u128::MAX`는 JSON과 lowering을 거치면서 그대로 보존됩니다. 음수 unsigned 값이나 범위를 벗어난 값은 wrap하지 않고 오류입니다. Float 값에는 [수치 연산](numeric-operations)에서 설명하는 정확한 폭의 16진 비트 문자열을 사용합니다.
 
-이 AST의 `format_version`과 `semantics_version`은 각각 1입니다. `features`는 빈 배열이어야 합니다. 알 수 없는 필드·버전·기능, 중복된 원본 JSON 키(escape를 풀면 같은 키인 경우 포함), 뒤따르는 추가 값은 `--no-verify`에서도 오류입니다. 라이브러리 진입점은 `ir::lower_ast::interchange::decode`이며 `encode`는 envelope를 출력합니다. `decode`의 기본 원본 크기 한도는 8 MiB이고 `decode_with_limit`으로 한도를 지정합니다. JSON 중첩에도 한도가 있습니다. 먼저 일반 map으로 읽으면 중복 키가 사라질 수 있으므로 원본 decoder를 사용합니다.
+이 AST의 `format_version`은 2이고 `semantics_version`은 1입니다. `features`는 빈 배열이어야 합니다. 알 수 없는 필드·버전·기능, 중복된 원본 JSON 키(escape를 풀면 같은 키인 경우 포함), 뒤따르는 추가 값은 `--no-verify`에서도 오류입니다. 라이브러리 진입점은 `ir::lower_ast::interchange::decode`이며 `encode`는 envelope를 출력합니다. `decode`의 기본 원본 크기 한도는 8 MiB이고 `decode_with_limit`으로 한도를 지정합니다. JSON 중첩에도 한도가 있습니다. 먼저 일반 map으로 읽으면 중복 키가 사라질 수 있으므로 원본 decoder를 사용합니다.
 
-[전체 JSON Schema](https://github.com/wavefnd/Whale/blob/master/ir/schema/ast-v1.schema.json)는 형태·필수 필드·variant를 정의합니다. 범위·타입 검사와 중복 키 검사가 추가로 적용됩니다. 스칼라 lowering은 리터럴, 변수·상수, add/sub/mul, 비교, 대입, if/while, return과 break/continue를 지원합니다. 호출·복합 값 표현식은 미지원입니다. `Opaque`는 스키마에서 표현할 수 있지만 lowering에서 거부합니다.
+[전체 JSON Schema](https://github.com/wavefnd/Whale/blob/master/ir/schema/ast-v2.schema.json)는 형태·필수 필드·variant를 정의합니다. 범위·타입 검사와 중복 키 검사가 추가로 적용됩니다. 스칼라 lowering은 리터럴, 변수·상수, add/sub/mul, 비교, 대입, if/while, return과 break/continue를 지원합니다. 함수 참조·직접 호출·간접 호출을 지원하며, 복합 값 표현식은 미지원입니다. `Opaque`는 스키마에서 표현할 수 있지만 lowering에서 거부합니다.
 
-기존의 bare Program에는 envelope를 추가하고 JSON 숫자 리터럴을 정수의 10진 문자열 또는 float 비트 문자열로 바꿔야 합니다. 무버전 입력은 거부합니다. AST와 typed IR의 버전 번호는 지금 둘 다 1이어도 독립적으로 관리됩니다.
+기존의 bare Program에는 envelope를 추가하고 JSON 숫자 리터럴을 정수의 10진 문자열 또는 float 비트 문자열로 바꿔야 합니다. 무버전 입력은 거부합니다. 형식 1 입력은 형식 2로 옮기면서 `program.declarations` 배열(사용하지 않으면 빈 배열)과 함수 정의의 명시적인 `convention`·`linkage`를 추가해야 합니다. AST와 typed IR은 독립적으로 버전을 관리하며 둘 다 형식 버전 2, 의미 버전 1을 사용합니다.
 
 ### 거부되는 입력과 CLI 복구
 
 다음 완전한 입력을 `invalid.json`으로 저장합니다.
 
 ```json
-{"format_version":99,"semantics_version":1,"features":[],"program":{"globals":[],"functions":[]}}
+{
+  "format_version": 99,
+  "semantics_version": 1,
+  "features": [],
+  "program": {
+    "globals": [],
+    "functions": [],
+    "declarations": []
+  }
+}
 ```
 
 ```sh
@@ -207,7 +309,7 @@ cargo run --locked --features socket-cli -- ir lower invalid.json -o rejected.wi
 ```
 
 ```text
-Failed to parse socket JSON: unsupported AST format_version 99; expected 1
+Failed to parse socket JSON: unsupported AST format_version 99; expected 2
 ```
 
 명령은 0이 아닌 상태로 종료하며 새 출력을 만들거나 기존 파일을 덮어쓰지 않습니다. 타입 불일치도 출력 게시 전에 실패합니다. `socket-cli` 없이 빌드한 바이너리는 상태 2로 종료하고 `--features socket-cli`가 포함된 복구 명령을 출력합니다.
