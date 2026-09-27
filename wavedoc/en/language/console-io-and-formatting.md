@@ -4,14 +4,14 @@ path: language/console-io-and-formatting
 locale: en
 group: language
 group_order: 2
-order: 13
-title: Console I/O and formatting
-summary: The print, println, and input statements and their placeholder rules.
+order: 16
+title: Console input, output, and formatting
+summary: print, println, input Describes sentences and placeholder rules.
 ---
 
-## I/O statements
+## input/output statement
 
-`print`, `println`, and `input` are Wave language statements for formatted console I/O.
+Wave provides `print`, `println`, and `input` as console input/output statements.
 
 ```wave
 fun main() {
@@ -22,49 +22,59 @@ fun main() {
 }
 ```
 
-Each statement ends with `;`. The first argument must be a string literal; a variable or computed string cannot be used as the format argument.
+Each sentence ends with `;`. The first argument must be a string literal. Variables or calculated strings cannot be used as format arguments.
 
-## Placeholders
+## placeholder
 
-Only the exact two-character sequence `{}` is a placeholder.
+Only exactly two characters, `{}`, are placeholders.
 
 ```wave
 println("name = {}, score = {}", name, score);
 ```
 
-The number of placeholders must equal the number of following expressions. A mismatch is a compile-time error.
+The number of placeholders and the number of expressions that follow must be exactly the same. If the numbers are different, it is a grammar error.
 
 ```wave
-println("{} {}", one);       // error: two placeholders, one value
-println("plain text", one); // error: no placeholder, extra value
+println("{} {}", one);
+// 오류: 자리표시자 2개, 값 1개
+println("plain text", one);
+// 오류: 자리표시자 없음, 값이 남음
 ```
 
-Other braces remain literal text; there are no named or indexed placeholders in this syntax.
+Other forms of curly braces are left as plain text. There are no named or numbered placeholders in this grammar.
 
 ## print and println
 
-`print` writes the formatted text as-is. `println` appends a newline.
+`print` prints the formatted text as is, and `println` adds a line break.
 
 ```wave
 print("loading...");
 println("done");
 ```
 
-Formatting accepts scalar values such as integers, floating-point values, strings, and pointers. Arrays and structs are not formatting arguments.
+Formatting arguments use scalar values such as integers, floating point numbers, strings, and pointers. Arrays and structures cannot be used as formatting arguments.
 
-## input destinations
+## input Target
 
-Every expression after the `input` format must identify writable storage for the parsed value.
+`input` stores the read value in the destination, so all expressions after format must be writable locations.
 
 ```wave
 var number: i32 = 0;
 input("{}", number);
 ```
 
-Variables, supported field accesses, and supported dereference forms can be destinations. Literals and computed rvalues cannot.
+Variables, fields and dereferenced storage locations can be used as targets. Literals and calculation results cannot be used as input.
 
-If `input` cannot convert every requested value, the program exits with a failure status.
+If all input values cannot be converted to the requested type, the program exits with a failure status.
 
-## Runtime boundary
+## runtime boundary
 
-These console statements require a hosted runtime. Freestanding kernels and embedded programs provide target-specific input and output through explicit functions or FFI boundaries.
+These statements use console input and output from the hosted environment. In a freestanding environment, input/output provided by the kernel or device must be defined as a function or FFI boundary.
+
+## Input value and range
+
+bool input only accepts `0` and `1`. It does not interpret 2 as true or accept the string `true` as the same input. Integer input must be within the range of the target integer width. 128, 256, 512, and 1024-bit integers are also processed based on the overall width of the type.
+
+Format error, out of range, before required input EOF fails. The built-in input is not a function that returns failure and re-enters, but is an input function that terminates the process on failure. If you need recoverable input processing, read the bytes with io and construct a separate parser.
+
+[Input Calculator Practice](/docs/en/practice/input-calculator) · [File and io](/docs/en/stdlib/files-io)

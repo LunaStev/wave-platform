@@ -3,10 +3,10 @@ translation_set_id: whale-ir-reference
 path: whale/ir-reference
 locale: en
 group: whale
-group_order: 5
-order: 2
+group_order: 1
+order: 6
 title: Whale IR reference
-summary: Types, identities, well-formed functions, evaluation order, and interchange rules.
+summary: Describes types, identifiers, function validity, evaluation order, and exchange format.
 ---
 
 ## Modules and identities

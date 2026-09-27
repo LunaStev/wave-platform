@@ -3,8 +3,8 @@ translation_set_id: whale-amd64-target
 path: whale/amd64-target
 locale: ko
 group: whale
-group_order: 5
-order: 6
+group_order: 1
+order: 10
 title: AMD64 타깃과 ABI
 summary: Linux AMD64 타깃 속성, 호출 경계와 native 기능 범위를 설명합니다.
 ---

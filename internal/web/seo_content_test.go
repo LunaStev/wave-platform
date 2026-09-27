@@ -17,6 +17,7 @@ import (
 	documentdomain "github.com/wavefnd/wave-platform/internal/document"
 	questiondomain "github.com/wavefnd/wave-platform/internal/question"
 	"github.com/wavefnd/wave-platform/internal/storage"
+	"github.com/wavefnd/wave-platform/wavedoc"
 )
 
 func seoFrontend(t *testing.T, seo SEOHandler) http.Handler {
@@ -110,22 +111,27 @@ func TestTranslatedSitemapAndFallbackHTML(t *testing.T) {
 		}
 		seen[item.Location] = true
 		if strings.HasSuffix(item.Location, path) {
-			if item.LastModified == "" || len(item.Alternates) != 4 {
+			if item.LastModified == "" || len(item.Alternates) != len(wavedoc.SupportedLocales)+1 {
 				t.Fatalf("alternates or lastmod missing: %#v", item)
 			}
 			for _, alt := range item.Alternates {
-				if alt.Language != "en" && alt.Language != "ko" && alt.Language != "ja" && alt.Language != "x-default" {
+				if !wavedoc.SupportsLocale(alt.Language) && alt.Language != "x-default" {
 					t.Fatalf("untranslated locale advertised: %#v", alt)
 				}
 			}
 		}
 	}
-	for _, locale := range []string{"en", "ko", "ja"} {
+	for _, locale := range wavedoc.SupportedLocales {
 		if !seen["https://wave.example/docs/"+locale+path] {
 			t.Fatalf("missing %s", locale)
 		}
 	}
-	if seen["https://wave.example/docs/zh"+path] {
+	// Make one translation unavailable explicitly. Fallback behavior must not
+	// depend on which official pages happen to have been translated.
+	archiveSEOTranslation(t, db, "zh", strings.TrimPrefix(path, "/"))
+	fallbackSitemap := httptest.NewRecorder()
+	seo.Sitemap(fallbackSitemap, httptest.NewRequest("GET", "/sitemap.xml", nil))
+	if strings.Contains(fallbackSitemap.Body.String(), "https://wave.example/docs/zh"+path) {
 		t.Fatal("fallback URL in sitemap")
 	}
 	server := seoFrontend(t, seo)
@@ -242,5 +248,18 @@ func TestMultilingualHeadingAnchorsRemainReadable(t *testing.T) {
 		if !strings.Contains(markup, expected) {
 			t.Fatalf("missing %s in %s", expected, markup)
 		}
+	}
+}
+
+func archiveSEOTranslation(t *testing.T, db *storage.Database, locale, path string) {
+	t.Helper()
+	repository := documentdomain.NewRepository(db)
+	doc, err := repository.Document("official/" + locale + "/" + path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc.Status = "archived"
+	if err := repository.UpsertDocument(doc); err != nil {
+		t.Fatal(err)
 	}
 }

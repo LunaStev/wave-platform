@@ -44,12 +44,15 @@ complete. Documentation describes the current compiler contract without a
 manual-wide Wave version label. Local variables use `var`; `let` and `let mut`
 are removed syntax.
 
-## Wave and Whale navigation
+## Wave, standard library, and Whale navigation
 
-The documentation header provides separate Wave and Whale navigation. A document
-belongs to Whale when its front-matter `path` starts with `whale/`; all other
+The documentation header provides separate Wave, standard library, and Whale navigation. A document
+belongs to Whale when its front-matter `path` starts with `whale/`; `stdlib/` paths belong to the standard library. The existing
+`reference/standard-library`, `reference/string-and-bytes`,
+`reference/memory-and-buffer`, and `reference/system-io-network-process` paths
+also belong to the standard library, preserving their published URLs. Other
 paths remain in Wave. Group names and titles do not determine the project.
-Existing Wave URLs, including `toolchain/whale-*`, remain unchanged.
+Toolchain documents live under `whale/`. Retired URLs are mapped in `wavedoc/redirects.json` and redirect to the canonical document.
 
 Add Whale Markdown files directly to `wavedoc/{locale}/whale/`:
 
@@ -81,3 +84,66 @@ the Go binary, so **rebuild and restart the application after adding or editing
 files** (for Docker, `docker compose up --build -d`). The server imports the
 embedded files at startup and stores published revisions in the platform
 database. Do not edit generated XML or database values by hand.
+
+
+## Language lessons and examples
+
+Korean language lessons and detailed rules share `ko/language/`, with complete projects in `ko/practice/`. Do not create a separate `learn` section.
+Use learning objectives, a runnable example, expected output, explanation, an
+exercise, and its answer. Reference pages describe exact contracts; link to them
+from lessons rather than assuming the reader will inspect compiler sources.
+Standard library pages must identify imports, units, return/error behavior,
+ownership, platform requirements, and a complete example where practical.
+
+Mark validated complete examples with `<!-- wave-example: unique-name -->`
+immediately before their Wave fence and add the same ID to `wavedoc/examples.json`.
+The manifest supplies input, expected output, expected status, and local fixture
+files. `check` is for examples requiring an external service; it does not certify
+runtime behavior. `reject` examples must specify the expected diagnostic fragment.
+Unmarked fences must say whether they are snippets, declarations, or deliberately
+invalid examples. Do not label incomplete snippets as runnable programs.
+
+```shell
+python3 tools/check-doc-translations.py
+python3 tools/check-doc-examples.py --links-only
+python3 tools/check-doc-examples.py --compiler /path/to/wavec --std-root /matching/std
+```
+
+The checker writes builds and program files to temporary directories, verifies
+internal document links in every locale, and never uses an implicit installed std. Run it
+on a native host with the OS facilities required by the selected examples. Use
+`--case example-name` to check a subset. Node navigation tests and Go SEO tests
+cover tab isolation, legacy URLs, translation fallback, and server-rendered pages.
+
+## Readable teaching examples
+
+Use one statement per line, four-space indentation, and multiline function and
+control-flow bodies. Separate declarations, checks, computation, and cleanup
+with blank lines. Split long calls and imports at meaningful boundaries.
+Avoid compact one-line code even when the compiler accepts it.
+
+Installation pages describe installing Wave and running the first program.
+Keep implementation history and backend comparisons out of learning material.
+Teach each concept with progressive examples, explanations of results, boundary
+cases, and exercises with worked answers. Do not replace explanation with a
+signature list or repeat generic cautions to increase page length.
+
+## Keeping translations complete
+
+The Korean course is the source for the corresponding pages in all eight other
+locales. Translate the full explanations, tables, exercises, and worked answers.
+Keep fenced programs, commands, input, and output unchanged, including indentation
+and blank lines. Preserve API names and language syntax in prose. Use localised
+links so that readers stay in their selected language.
+
+Keep the same example IDs in translations; they refer to the canonical Korean
+examples and must not create duplicate manifest entries. The example checker
+verifies translated code against that source and executes each canonical case
+once. The translation checker compares page coverage, navigation metadata,
+headings, lists, tables, code fences, and internal links. It also detects leftover
+translation placeholders and untranslated Korean prose, while allowing the
+Hangul literals used in Unicode examples.
+
+Automated checks do not establish linguistic quality. Review translated prose
+for terminology, negation, boundary values, ownership, and error semantics. Do
+not remove an explanation or silently change an example to make a check pass.

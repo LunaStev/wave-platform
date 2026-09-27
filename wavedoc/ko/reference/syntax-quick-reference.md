@@ -3,7 +3,7 @@ translation_set_id: quick-reference
 path: reference/syntax-quick-reference
 locale: ko
 group: reference
-group_order: 3
+group_order: 5
 order: 3
 title: 문법 빠른 참조
 summary: 자주 쓰는 선언, 제어 흐름, 타입, 포인터와 FFI 문법을 한 페이지에 정리합니다.
@@ -28,6 +28,7 @@ fun max(left: i32, right: i32) -> i32 {
     if (left > right) {
         return left;
     }
+
     return right;
 }
 ```
@@ -74,9 +75,15 @@ for (var i: i32 = 0; i < 10; i += 1) {
 }
 
 match (status) {
-    Ready => { println("ready"); }
-    0 => { println("zero"); }
-    _ => { println("other"); }
+    Ready => {
+        println("ready");
+    }
+    0 => {
+        println("zero");
+    }
+    _ => {
+        println("other");
+    }
 }
 ```
 
@@ -105,13 +112,17 @@ input("{}", value);
 ```wave
 import("std::string::len");
 import("./helpers" as helpers);
-import("math")::{Vector};
+import("math")::{
+    Vector
+};
 
 pub fun add(left: i32, right: i32) -> i32 {
     return left + right;
 }
 
-pub import("./extra")::{increment};
+pub import("./extra"):: {
+    increment
+};
 ```
 
 로컬 경로는 `./`로 시작합니다. 별칭 import는 모듈 이름을 지정하고, 선택 import는 필요한 공개 항목을 이 파일의 이름 공간으로 가져옵니다. `pub import`는 선택한 항목을 다시 내보냅니다.
@@ -156,3 +167,7 @@ wavec build main.wave --emit=check
 wavec print supported-targets
 wavec print supported-emit-kinds
 ```
+
+## 학습과 예제 범위
+
+함수 밖에 따로 표시한 지역 변수·문장 예제는 함수 본문에 넣는 코드 조각입니다. 전체 실행 예제와 연습은 [Wave 학습 과정](/docs/ko/getting-started/overview)에서 이어집니다. 메모리와 외부 기능의 상세 규칙은 [표준 라이브러리](/docs/ko/stdlib)를 확인하십시오.

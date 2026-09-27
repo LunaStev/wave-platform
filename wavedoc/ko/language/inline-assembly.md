@@ -4,7 +4,7 @@ path: language/inline-assembly
 locale: ko
 group: language
 group_order: 2
-order: 9
+order: 19
 title: 인라인 어셈블리
 summary: asm 블록의 명령 문자열, in/out 피연산자와 clobber 계약을 설명합니다.
 ---
@@ -20,6 +20,7 @@ fun read_value() -> i64 {
         "mov rax, 123"
         out("rax") result
     }
+
     return result;
 }
 ```
@@ -62,3 +63,7 @@ asm {
 - 가능한 경우 아키텍처별 asm을 작은 함수 뒤에 격리하십시오.
 
 인라인 어셈블리의 동작과 이식성은 언어 타입만으로 보장되지 않습니다.
+
+## 학습과 예제 범위
+
+[전체 프로그램으로 연습하기](/docs/ko/getting-started/overview) · [표준 라이브러리](/docs/ko/stdlib)

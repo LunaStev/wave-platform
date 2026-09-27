@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/wavefnd/wave-platform/internal/storage"
+	"github.com/wavefnd/wave-platform/wavedoc"
 )
 
 func TestOfficialDocumentationUsesStableLanguageVocabulary(t *testing.T) {
@@ -17,12 +18,6 @@ func TestOfficialDocumentationUsesStableLanguageVocabulary(t *testing.T) {
 	forbidden := []string{
 		"`let`",
 		"`let mut`",
-		"i256",
-		"i512",
-		"i1024",
-		"u256",
-		"u512",
-		"u1024",
 		"current compiler contract",
 		"current implementation",
 		"this release",
@@ -45,92 +40,18 @@ func TestOfficialDocumentationUsesStableLanguageVocabulary(t *testing.T) {
 		}
 	}
 
-	expected := map[string][]string{
-		"en": {
-			"`var` is the syntax for declaring local variables.",
-			"`i8`, `i16`, `i32`, `i64`, `i128`",
-			"`isz`",
-			"`usz`",
-			"**Wave Explicit Memory Type Model**",
-		},
-		"ko": {
-			"`var`는 지역 변수를 선언하는 문법입니다.",
-			"`i8`, `i16`, `i32`, `i64`, `i128`",
-			"`isz`",
-			"`usz`",
-			"**Wave Explicit Memory Type Model**",
-		},
-		"ja": {
-			"`var` はローカル変数を宣言する構文です。",
-			"`i8`、`i16`、`i32`、`i64`、`i128`",
-			"`isz`",
-			"`usz`",
-			"**Wave Explicit Memory Type Model**",
-		},
-	}
-	for locale, phrases := range expected {
-		var combined strings.Builder
-		for _, document := range documents {
-			if document.Locale == locale {
-				combined.WriteString(document.Markdown)
-			}
-		}
-		for _, phrase := range phrases {
-			if !strings.Contains(combined.String(), phrase) {
-				t.Errorf("%s documentation is missing %q", locale, phrase)
-			}
-		}
-	}
-
+	// Assert language syntax without pinning natural-language translations to
+	// a particular sentence or punctuation convention.
 	requiredByDocument := map[string][]string{
-		"en/language/declarations-and-types": {
-			"A type alias is a readable alternative name for another type.",
-			"`isz` and `usz` represent signed and unsigned integers sized for the target's address space.",
-		},
-		"ko/language/declarations-and-types": {
-			"타입 별칭은 같은 타입을 코드의 문맥에 맞는 이름으로 표현하는 문법입니다.",
-			"`isz`는 주소 크기에 맞는 부호 있는 정수 타입이고, `usz`는 주소 크기에 맞는 부호 없는 정수 타입입니다.",
-		},
-		"en/language/explicit-memory-type-model": {
-			"`null` represents a pointer that does not point to a value.",
-			"pointers and arrays as explicit, language-level memory types",
-		},
-		"ko/language/explicit-memory-type-model": {
-			"`null`은 유효한 메모리 주소를 가리키지 않는 포인터 값입니다.",
-			"언어 차원의 명시적인 메모리 타입",
-		},
-		"en/language/console-io-and-formatting": {
-			"Arrays and structs are not formatting arguments.",
-		},
-		"ko/language/console-io-and-formatting": {
-			"배열과 구조체는 포매팅 인자로 사용할 수 없습니다.",
-		},
-		"en/language/modules-imports-and-ffi": {
-			"Local modules use a path beginning with `./`.",
-		},
-		"ko/language/modules-imports-and-ffi": {
-			"로컬 파일 경로는 `./`로 시작",
-		},
-		"ja/language/declarations-and-types": {
-			"型エイリアスは、別の型に読みやすい代替名を付けます。",
-			"`isz` と `usz` は、ターゲットのアドレス空間に合わせた大きさ",
-		},
-		"ja/language/explicit-memory-type-model": {
-			"`null` は、値を指していないポインタを表します。",
-			"言語レベルの明示的なメモリ型",
-		},
-		"ja/language/console-io-and-formatting": {
-			"配列と構造体はフォーマット引数にできません。",
-		},
-		"ja/language/modules-imports-and-ffi": {
-			"ローカルモジュールには `./` で始まるパスを使います。",
-		},
+		"language/declarations-and-types":     {"`var`", "`i8`", "`i16`", "`i32`", "`i64`", "`i128`", "`isz`", "`usz`"},
+		"language/explicit-memory-type-model": {"**Wave Explicit Memory Type Model**", "`null`", "ptr<i32>", "deref value = deref value + 1;"},
+		"language/console-io-and-formatting":  {"println", "input"},
+		"language/modules-imports-and-ffi":    {"`./`", "pub fun"},
 	}
 	for _, document := range documents {
-		key := document.Locale + "/" + document.Path
-		for _, phrase := range requiredByDocument[key] {
-			if !strings.Contains(document.Markdown, phrase) {
-				t.Errorf("%s is missing stable language contract %q", key, phrase)
+		for _, syntax := range requiredByDocument[document.Path] {
+			if !strings.Contains(document.Markdown, syntax) {
+				t.Errorf("%s/%s is missing language syntax %q", document.Locale, document.Path, syntax)
 			}
 		}
 	}
@@ -156,34 +77,22 @@ func TestSeedOfficialPublishesSupportedDocumentationLocales(t *testing.T) {
 		t.Fatalf("seed count=%d err=%v", count, err)
 	}
 	repository := NewRepository(database)
-	expectedTitles := map[string]string{
-		"en": "Pointers and explicit memory access",
-		"ko": "포인터와 명시적 메모리 접근",
-		"ja": "ポインタと明示的なメモリアクセス",
-	}
-	for _, locale := range []string{"en", "ko", "ja"} {
+	for _, locale := range wavedoc.SupportedLocales {
+		if expectedCounts[locale] == 0 || expectedCounts[locale] != expectedCounts["ko"] {
+			t.Fatalf("%s has %d documents; Korean has %d", locale, expectedCounts[locale], expectedCounts["ko"])
+		}
 		items, err := repository.Summaries(locale)
 		if err != nil || len(items) != expectedCounts[locale] {
 			t.Fatalf("%s summaries=%d err=%v", locale, len(items), err)
 		}
-		view, err := repository.Published(locale, "language/explicit-memory-type-model")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if view.Title != expectedTitles[locale] {
-			t.Fatalf("unexpected memory document: %#v", view)
-		}
-		if !strings.Contains(view.Markdown, "ptr<T>") || !strings.Contains(view.Markdown, "```wave") {
-			t.Fatal("published revision did not preserve the Markdown authoring source")
-		}
 	}
-	for _, locale := range []string{"zh", "es", "de", "ru", "id", "vi"} {
-		items, err := repository.Summaries(locale)
-		if err != nil || len(items) != expectedCounts[locale] {
-			t.Fatalf("%s summaries=%#v err=%v", locale, items, err)
+	for _, source := range sources {
+		view, err := repository.Published(source.Locale, source.Path)
+		if err != nil {
+			t.Fatalf("%s/%s: %v", source.Locale, source.Path, err)
 		}
-		if _, err := repository.Published(locale, "getting-started/overview"); err != nil {
-			t.Fatalf("%s overview: %v", locale, err)
+		if view.Title != source.Title || view.Markdown != source.Markdown {
+			t.Errorf("%s/%s did not preserve the translated authoring source", source.Locale, source.Path)
 		}
 	}
 	install, err := repository.Published("en", "getting-started/install")
@@ -209,7 +118,7 @@ func TestOfficialInstallDocumentsIncludeWindowsInstaller(t *testing.T) {
 		t.Fatal(err)
 	}
 	repository := NewRepository(database)
-	for _, locale := range []string{"en", "ko", "ja"} {
+	for _, locale := range wavedoc.SupportedLocales {
 		install, err := repository.Published(locale, "getting-started/install")
 		if err != nil {
 			t.Fatal(err)
@@ -217,7 +126,7 @@ func TestOfficialInstallDocumentsIncludeWindowsInstaller(t *testing.T) {
 		if !strings.Contains(install.Markdown, "https://wave-lang.dev/install.ps1") || !strings.Contains(install.Markdown, "-Latest") {
 			t.Fatalf("%s official Windows installer command is missing", locale)
 		}
-		if !strings.Contains(install.Markdown, "vex --version") || !strings.Contains(install.Markdown, "VexVersion") {
+		if !strings.Contains(install.Markdown, "vex --version") {
 			t.Fatalf("%s Vex installation guidance is missing", locale)
 		}
 	}

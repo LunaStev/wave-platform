@@ -25,7 +25,7 @@ wavec [global-options] <command> [command-options]
 | `wavec print <item>` | 대상과 툴체인 지원 정보를 질의합니다. |
 | `wavec install std` | 표준 라이브러리를 설치합니다. |
 | `wavec update std` | 설치된 표준 라이브러리를 업데이트합니다. |
-| `wavec --version` | 컴파일러와 LLVM 백엔드 버전을 출력합니다. |
+| `wavec --version` | 설치된 버전 정보를 출력합니다. |
 
 `wavec --help`에서 명령과 옵션의 전체 목록을 확인할 수 있습니다.
 
@@ -137,3 +137,14 @@ wavec print dep-search-paths
 ## 컴파일러와 툴체인의 경계
 
 `wavec`는 소스 검사, 코드 생성과 링크를 담당합니다. Vex는 패키지 manifest, 의존성 그래프, lockfile과 재현 가능한 패키지 빌드를 담당합니다. Whale은 독립적으로 실행하는 저수준 툴체인입니다.
+
+## std 경로 명시
+
+```shell
+wavec --std-root /absolute/path/to/std check main.wave
+wavec --std-root /absolute/path/to/std run main.wave
+```
+
+명시한 std 경로는 설치 경로보다 우선하며, 잘못된 경로나 호환되지 않는 std이면 실패합니다. 다른 설치의 std로 자동 대체하지 않습니다. 컴파일러와 대응하는 std를 선택하십시오.
+
+출력 `-o`에는 소스·입력 파일과 다른 경로를 사용합니다. `check`는 런타임 동작까지 확인하지 않으므로 [실습](/docs/ko/practice/input-calculator)에서는 실행 결과도 확인합니다.

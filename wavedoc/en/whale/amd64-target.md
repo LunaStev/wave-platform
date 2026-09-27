@@ -3,10 +3,10 @@ translation_set_id: whale-amd64-target
 path: whale/amd64-target
 locale: en
 group: whale
-group_order: 5
-order: 6
-title: AMD64 target and ABI
-summary: Linux AMD64 target properties, calling boundaries, and native feature coverage.
+group_order: 1
+order: 10
+title: AMD64 targets and ABI
+summary: Linux AMD64 Describes target properties, call boundaries, and native function scope.
 ---
 
 ## Target identity

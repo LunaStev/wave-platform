@@ -3,10 +3,10 @@ translation_set_id: whale-o0-debugging
 path: whale/o0-debugging
 locale: en
 group: whale
-group_order: 5
-order: 5
+group_order: 1
+order: 9
 title: O0 and debugging
-summary: Preservation of source computations, constant expressions, storage, and debug correspondence.
+summary: Rules for preserving calculations, constant expressions, storage space, and debug response information.
 ---
 
 ## Preservation model

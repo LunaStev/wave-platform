@@ -3,10 +3,10 @@ translation_set_id: quick-reference
 path: reference/syntax-quick-reference
 locale: ja
 group: reference
-group_order: 3
+group_order: 5
 order: 3
 title: 構文クイックリファレンス
-summary: よく使う宣言、制御フロー、型、ポインタ、FFI の構文を 1 ページにまとめます。
+summary: よく使う宣言、制御フロー、型、ポインタとFFI文法を1ページにまとめます。
 ---
 
 ## 宣言
@@ -19,7 +19,7 @@ static total: i64 = 0;
 type Identifier = u64;
 ```
 
-`var` はローカル宣言であり、明示的な型が必要です。`const` と `static` はトップレベル宣言です。
+`var`は地域、`const`/`static`は最上位宣言です。ローカル変数は型を明示的に宣言します。
 
 ## 関数
 
@@ -28,11 +28,12 @@ fun max(left: i32, right: i32) -> i32 {
     if (left > right) {
         return left;
     }
+
     return right;
 }
 ```
 
-## ジェネリクス
+## ジェネリック
 
 ```wave
 fun identity<T>(value: T) -> T {
@@ -42,9 +43,9 @@ fun identity<T>(value: T) -> T {
 var value: i32 = identity<i32>(10);
 ```
 
-ジェネリック関数の呼び出しには明示的な型引数が必要です。
+ジェネリックコールは型引数を指定します。
 
-## 構造体と列挙型
+## 構造体とenum
 
 ```wave
 struct Pair {
@@ -58,7 +59,7 @@ enum Result -> i32 {
 }
 ```
 
-## 条件分岐とループ
+## 条件とループ
 
 ```wave
 if (ready) {
@@ -74,13 +75,19 @@ for (var i: i32 = 0; i < 10; i += 1) {
 }
 
 match (status) {
-    Ready => { println("ready"); }
-    0 => { println("zero"); }
-    _ => { println("other"); }
+    Ready => {
+        println("ready");
+    }
+    0 => {
+        println("zero");
+    }
+    _ => {
+        println("other");
+    }
 }
 ```
 
-`if`、`while`、`for`、`match` のヘッダーは括弧で囲みます。
+`if`、`while`、`for`、`match`のヘッダーは括弧を使用します。
 
 ## 配列とポインタ
 
@@ -98,14 +105,31 @@ println("{}", value);
 input("{}", value);
 ```
 
-最初の引数は文字列リテラルです。正確な `{}` プレースホルダーひとつにつき後続する式がひとつ必要で、`input` の格納先は代入可能でなければなりません。
+最初の引数は文字列リテラルです。正確な`{}`プレースホルダーごとに次の式が1つずつ必要であり、`input`対象は代入可能でなければなりません。
 
-## インポートと FFI
+## importと公開アイテム
 
 ```wave
-import("std::string::len")::{len};
+import("std::string::len");
 import("./helpers" as helpers);
-import("math")::{add, Point};
+import("math")::{
+    Vector
+};
+
+pub fun add(left: i32, right: i32) -> i32 {
+    return left + right;
+}
+
+pub import("./extra"):: {
+    increment
+};
+```
+
+ローカルパスは`./`で始まります。エイリアスimportはモジュール名を指定し、選択importは必要なパブリックエントリをこのファイルの名前空間にインポートします。 `pub import`は選択した項目を再エクスポートします。
+
+## FFI
+
+```wave
 extern(c) fun native_call(value: i32) -> i32;
 
 export(c) fun wave_call(value: i32) -> i32 {
@@ -113,16 +137,14 @@ export(c) fun wave_call(value: i32) -> i32 {
 }
 ```
 
-別の Wave モジュールからインポートする宣言には `pub` を使い、選択した公開名を再エクスポートするには `pub import("path")::{name};` を使います。
-
-## ターゲット条件付き項目
+## 対象条件付き項目
 
 ```wave
 #[target(os="linux", arch="riscv64")]
 extern(c) fun platform_call(value: i32) -> i32;
 ```
 
-対応する条件キーは `arch`、`os`、`env`、`abi` です。この属性は次のトップレベル項目を制御します。
+サポート条件キーは`arch`、`os`、`env`、`abi`です。プロパティはすぐに次の最上位項目を制御します。
 
 ## インラインアセンブリ
 
@@ -136,12 +158,16 @@ asm {
 }
 ```
 
-命令テキストとレジスタ名はターゲット固有です。ブロックに必要なすべての入力、出力、暗黙の clobber を宣言します。
+コマンドテキストとレジスタ名はターゲットに依存します。ブロックに必要なすべての入力、出力、および隠れたclobberを宣言します。
 
-## コンパイラ照会
+## ソースチェック
 
 ```shell
 wavec build main.wave --emit=check
 wavec print supported-targets
 wavec print supported-emit-kinds
 ```
+
+## 学習と例の範囲
+
+関数の外に別に表示したローカル変数・文例は、関数本文に入れるコードの断片です。完全な実行例と練習は[Wave学習コース](/docs/ja/getting-started/overview)に続きます。メモリと外部機能の詳細規則については、[標準ライブラリ](/docs/ja/stdlib)を確認してください。

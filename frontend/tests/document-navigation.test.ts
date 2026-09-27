@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { documentationCatalog, documentationPath, documentationProject, projectDocuments } from '../src/services/documentNavigation.ts'
+import { canonicalDocumentPath, documentationCatalog, documentationPath, documentationProject, projectDocuments } from '../src/services/documentNavigation.ts'
 
 test('URL selects the project and separates catalogue from document paths', () => {
   for (const path of ['', 'language/types', 'toolchain/whale-overview', 'whales/overview']) {
@@ -36,4 +36,36 @@ test('navigation merges translations before sorting within the selected project'
   assert.equal(whale[whale.findIndex(item => item.path === 'whale/symbols') - 1].path, 'whale/alignment')
   assert.deepEqual(projectDocuments([], [], 'whale'), [])
   assert.equal(english[2].title, 'Symbols')
+})
+
+test('standard library has an isolated catalogue, preserves old URLs and translation fallback', () => {
+  const legacy = ['reference/standard-library', 'reference/string-and-bytes', 'reference/memory-and-buffer', 'reference/system-io-network-process']
+  for (const path of [...legacy, 'stdlib/buffer']) {
+    assert.equal(documentationProject(path), 'stdlib')
+    assert.equal(documentationPath(path), path)
+  }
+  assert.equal(documentationProject('stdlib'), 'stdlib')
+  assert.equal(documentationPath('stdlib'), '')
+  assert.equal(documentationProject('stdlib-extra/page'), 'wave')
+  for (const locale of ['ko', 'en', 'ja']) assert.equal(documentationCatalog(locale, 'stdlib'), `/docs/${locale}/stdlib`)
+  const english = [
+    { path: legacy[0], title: 'Library', groupOrder: 1, order: 1 },
+    { path: 'stdlib/buffer', title: 'Buffer', groupOrder: 1, order: 2 },
+    { path: 'language/types', title: 'Types', groupOrder: 3, order: 1 },
+    { path: 'whale/overview', title: 'Whale', groupOrder: 5, order: 1 },
+  ]
+  const translated = [{ ...english[0], title: '표준 라이브러리' }]
+  assert.deepEqual(projectDocuments(translated, english, 'stdlib').map(item => item.title), ['표준 라이브러리', 'Buffer'])
+  assert.deepEqual(projectDocuments(translated, english, 'wave').map(item => item.path), ['language/types'])
+  assert.deepEqual(projectDocuments([], [], 'stdlib'), [])
+})
+
+
+test('retired lesson and toolchain URLs point at the single canonical collection', () => {
+  assert.equal(canonicalDocumentPath('learn/functions'), 'language/functions-and-generics')
+  assert.equal(canonicalDocumentPath('learn/strings'), 'language/strings')
+  assert.equal(canonicalDocumentPath('toolchain/build-link-targets'), 'whale/build-link-targets')
+  assert.equal(canonicalDocumentPath('getting-started/design-goals'), 'getting-started/overview')
+  assert.equal(canonicalDocumentPath('language/control-flow'), 'language/control-flow')
+  assert.equal(documentationProject(canonicalDocumentPath('toolchain/whale-cli')), 'whale')
 })

@@ -3,10 +3,10 @@ translation_set_id: whale-assembler-linker
 path: whale/assembler-linker
 locale: en
 group: whale
-group_order: 5
-order: 7
-title: Assembler and static linking
-summary: Operand encoding, section layout, symbol binding, and executable entry points.
+group_order: 1
+order: 11
+title: Assembly and static linking
+summary: Describes operand encoding, section placement, symbol binding, and execution entry points.
 ---
 
 ## Assembly and objects

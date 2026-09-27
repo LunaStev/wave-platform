@@ -4,47 +4,48 @@ path: language/comments
 locale: en
 group: language
 group_order: 2
-order: 11
+order: 15
 title: Comments
-summary: Line comments, nestable block comments, and diagnostics for unterminated comments.
+summary: Describes single-line comments, nestable block comments, and unclosed comment diagnostics.
 ---
 
-## Line comments
+## one line comment
 
-Everything after `//` through the end of the line is a comment.
+The content after `//` is a comment until the end of the line.
 
 ```wave
-var count: i32 = 10; // active request count
+var count: i32 = 10;
+// 현재 요청 수
 ```
 
-## Block comments
+## block annotation
 
-`/*` and `*/` delimit a block comment.
+Process the space between `/*` and `*/` as a block comment.
 
 ```wave
-/* A comment can span
-   multiple lines. */
+/* 여러 줄에 걸친
+   설명을 작성할 수 있습니다. */
 ```
 
-Block comments can be nested.
+You can nest other block comments within a block comment.
 
 ```wave
-/* outer comment
-   /* inner comment */
-   outer comment again
+/* 바깥 주석
+   /* 안쪽 주석 */
+다시 바깥 주석
 */
 ```
 
-## Comment markers inside strings
+## Strings and Comment Marks
 
-Inside string and character literals, `//`, `/*`, and `*/` are literal text rather than comment delimiters.
+`//`, `/*`, and `*/` within string and character literals are string content and are not treated as the beginning or end of a comment.
 
 ```wave
 var text: str = "https://wave-lang.dev";
 ```
 
-## Unterminated block comments
+## Unclosed block comments
 
-Every `/*` requires a matching `*/`. An unterminated block comment produces diagnostic `E1002` (`UnterminatedComment`).
+Failure to close the block comment with `*/` will result in the diagnosis `E1002 UnterminatedComment`.
 
-When temporarily commenting out a large region, make sure nested comment depth remains balanced.
+Even when temporarily disabling long blocks, make sure the nesting depth is correct.

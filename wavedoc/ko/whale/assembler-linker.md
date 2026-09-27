@@ -3,8 +3,8 @@ translation_set_id: whale-assembler-linker
 path: whale/assembler-linker
 locale: ko
 group: whale
-group_order: 5
-order: 7
+group_order: 1
+order: 11
 title: 어셈블러와 정적 링크
 summary: 피연산자 인코딩, 섹션 배치, 심볼 바인딩과 실행 진입점을 설명합니다.
 ---

@@ -4,7 +4,7 @@ path: language/storage-duration
 locale: ko
 group: language
 group_order: 2
-order: 12
+order: 18
 title: 저장 수명과 변경 가능성
 summary: var, const와 static의 범위와 쓰기 가능성을 구분합니다.
 ---
@@ -48,3 +48,7 @@ value = 2;
 ## 수명과 포인터
 
 지역 변수의 주소를 `&`로 얻을 수 있지만, 포인터가 가리키는 저장소의 실제 유효 기간을 `ptr<T>` 타입이 추적하지는 않습니다. 지역 저장소의 주소를 함수 밖으로 넘길 때는 그 주소가 계속 유효한지 프로그램 구조에서 직접 보장해야 합니다.
+
+## 학습과 예제 범위
+
+[전체 프로그램으로 연습하기](/docs/ko/getting-started/overview) · [표준 라이브러리](/docs/ko/stdlib)

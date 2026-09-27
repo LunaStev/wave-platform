@@ -5,77 +5,45 @@ locale: ja
 group: getting-started
 group_order: 1
 order: 1
-title: Wave 言語の概要
-summary: Wave の構文、プログラム構造、コンソール入出力、低レベル機能を実践的に紹介します。
+title: Wave のドキュメントと学習ガイド
+summary: Wave をインストールから実践的なプログラムまで段階的に学習し、言語ルールや標準ライブラリ API を調べます。
 ---
 
-## Wave について
+## このガイドで Wave を学びましょう
 
-Wave は、ネイティブコード生成と明示的な低レベル制御のために設計された静的型付きシステムプログラミング言語です。型、メモリアクセス、ネイティブインターフェース、ターゲット設定は、ソースコードとビルドコマンド上に明示されます。
+Wave ソース コードの作成、コンパイルと実行、結果の確認を学びます。プログラミングが初めての場合は、以下の順序に従ってください。別の言語を知っている場合は、各章の例を実行し、そのルールと境界ケースをすでに知っている言語と比較してください。
 
-## 最初のプログラム
+## 学習パス
 
-```wave
-fun main() {
-    println("Hello, Wave!");
-}
-```
+|ステップ|章|何を学ぶか|
+| --- | --- | --- |
+|セットアップ| [インストール](/docs/ja/getting-started/install) |コンパイラと標準ライブラリを準備し、それらが実行されることを確認します。|
+| 1 | [初めてのプログラム](/docs/ja/language/program-structure) |ソースファイルを作成、確認、実行し、終了コードを理解する|
+| 2 | [変数と型](/docs/ja/language/declarations-and-types) |値を保存し、必要な範囲のタイプを選択します|
+| 3 | [演算子と変換](/docs/ja/language/expressions-and-operators) |評価順序と型変換の結果を説明する|
+| 4 | [条件とループ](/docs/ja/language/control-flow) |条件で分岐し、ループでデータを処理する|
+| 5 | [関数](/docs/ja/language/functions-and-generics) |繰り返される操作を関数に抽出する|
+| 6 | [配列](/docs/ja/language/arrays) |インデックスによって要素にアクセスし、配列を反復処理します。|
+| 7 | [文字列](/docs/ja/language/strings) |文字とバイトを区別し、エスケープと文字列の長さを理解する|
+| 8 | [構造体とバリアント](/docs/ja/language/structures-enums-and-aliases) |関連データをグループ化し、成功と失敗を表す|
+| 9 | [ポインタとライフタイム](/docs/ja/language/explicit-memory-type-model) |アドレスを通じて元の値を変更し、その有効期間を管理します|
+| 10 | [ダイナミックメモリ](/docs/ja/language/allocation) |割り当て失敗の処理とメモリの解放|
+| 11 | [モジュールとジェネリック](/docs/ja/language/modules-imports-and-ffi) |ファイル間でコードを分割し、異なるタイプの関数を再利用する|
+| 12 | [エラー処理](/docs/ja/language/errors) |結果を確認し、失敗した場合はリソースをクリーンアップする|
+| 13 | [非同期コードの概要](/docs/ja/language/async-and-never) |Future を作成し、完了するまで待ちます|
 
-このソースを `main.wave` として保存し、次のように実行します。
+## 知識を実践に移す
 
-```shell
-wavec run main.wave
-```
+核となる章の後に、[入力計算機](/docs/ja/practice/input-calculator)、[ファイル リーダー](/docs/ja/practice/file-reader)、[バイナリ メッセージ](/docs/ja/practice/binary-message)、[TCP クライアント](/docs/ja/practice/tcp-client) を構築します。各プロジェクトで入力が成功したケースと失敗したケースの両方をテストします。
 
-実行せずに実行ファイルをビルドする場合は、次のコマンドを使います。
+## 3 つのドキュメント タブ
 
-```shell
-wavec build main.wave -o app
-```
+- **Wave**: ガイド付き言語コースと実践的なプロジェクトを順番に進めていきます。
+- **[標準ライブラリ](/docs/ja/stdlib)**: 各モジュールの API、戻り値、エラー、所有権ルール、およびプラットフォーム要件。
+- **[Whale](/docs/ja/whale)**: ビルドとリンク、パッケージ管理、コマンドの使用法、および低レベルのツールチェーン。
 
-ホスト環境向けの実行ファイルは通常 `main` から開始します。フリースタンディングビルドでは、適切なリンカー設定とともに別のエントリーシンボルを指定できます。
+例では、完全なプログラムと関数内に属するスニペットを区別します。ターミナルで `wavec` コマンドを実行し、`wave` コード ブロックを `.wave` ファイルに保存します。入力と出力は別々に示されています。標準入力を読み取る例では、入力する内容を指定します。
 
-## 基本的な文の形式
+## 行き詰まったとき
 
-Wave の関数シグネチャは明示的です。ローカル変数では、変数名の後に型を記述します。
-
-```wave
-fun add(left: i32, right: i32) -> i32 {
-    var result: i32 = left + right;
-    return result;
-}
-
-fun main() {
-    var count: i32 = 1;
-    var next: i32 = count + 1;
-    count += 1;
-    println("count = {}, next = {}", count, next);
-}
-```
-
-`var` はローカル変数を宣言する構文です。ローカル宣言では `var name: Type = value;` の形式で変数の型を明示します。`const` と `static` はトップレベル宣言です。
-
-## コンソール入出力
-
-`print`、`println`、`input` は Wave のコンソール入出力文です。最初の引数は文字列リテラルであり、各 `{}` プレースホルダーは後続する値ひとつに対応します。
-
-```wave
-fun main() {
-    var value: i32 = 0;
-    input("{}", value);
-    print("value = ");
-    println("{}", value);
-}
-```
-
-## 低レベル機能
-
-Wave は `ptr<T>`、アドレス取得の `&`、明示的な `deref`、`extern(c)` と `export(c)` による C ABI 境界、インライン `asm` を提供します。これらの機能を使うプログラムは、各メモリ API やネイティブ API が必要とする所有権、境界、アラインメント、ライフタイムの規則を定義します。
-
-## 推奨学習順序
-
-1. コンパイラをインストールし、`wavec --version` と `wavec --help` を確認します。
-2. 宣言、型、式、制御フローを学びます。
-3. 関数、ジェネリクス、構造体、列挙型、`proto` を学びます。
-4. ポインタ、インポート、FFI、標準ライブラリへ進みます。
-5. コンパイラ、Vex、Whale、ターゲット、クイックリファレンスの各ページを参照資料として使います。
+[トラブルシューティング](/docs/ja/reference/diagnostics) を使用して、インストール、ソースのチェック、リンク、および実行の問題を区別します。言語規則は [構文クイック リファレンス](/docs/ja/reference/syntax-quick-reference)、コマンドは [コンパイラー リファレンス](/docs/ja/getting-started/compiler)、API は [標準ライブラリ ガイド](/docs/ja/reference/standard-library) で調べてください。

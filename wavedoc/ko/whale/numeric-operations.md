@@ -3,8 +3,8 @@ translation_set_id: whale-numeric-operations
 path: whale/numeric-operations
 locale: ko
 group: whale
-group_order: 5
-order: 3
+group_order: 1
+order: 7
 title: 수치 연산
 summary: 정수 wrap, checked 연산, 시프트, 형변환 오류와 부동소수점 결과를 설명합니다.
 ---

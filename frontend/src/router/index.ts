@@ -1,3 +1,4 @@
+import { canonicalDocumentPath } from '../services/documentNavigation'
 import { createRouter, createWebHistory } from 'vue-router'
 
 import MainLayout from '../layouts/MainLayout.vue'
@@ -33,6 +34,7 @@ const router = createRouter({
 		{ path: 'releases/:slug', name: 'release-detail', component: BlogPage, meta: { blogCategory: 'release' } },
         { path: 'docs', name: 'docs', redirect: () => ({ name: 'docs-locale', params: { docLocale: initialDocumentLocale() } }) },
         { path: 'docs/:docLocale(en|ko|ja|zh|es|de|ru|id|vi)', name: 'docs-locale', component: DocsPage },
+        { path: 'docs/:docLocale(en|ko|ja|zh|es|de|ru|id|vi)/stdlib', name: 'docs-stdlib', component: DocsPage, meta: { documentationProject: 'stdlib' } },
         { path: 'docs/:docLocale(en|ko|ja|zh|es|de|ru|id|vi)/whale', name: 'docs-whale', component: DocsPage, meta: { documentationProject: 'whale' } },
         { path: 'docs/:docLocale(en|ko|ja|zh|es|de|ru|id|vi)/:pathMatch(.*)*', name: 'document', component: DocsPage },
         { path: 'docs/:pathMatch(.*)*', name: 'document-legacy', redirect: (to) => ({
@@ -85,6 +87,14 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to) => {
+  if (to.name === 'document') {
+    const raw = to.params.pathMatch
+    const path = Array.isArray(raw) ? raw.join('/') : String(raw ?? '')
+    const canonical = canonicalDocumentPath(path)
+    if (canonical !== path) {
+      return { name: 'document', params: { ...to.params, pathMatch: canonical.split('/') }, query: to.query, hash: to.hash, replace: true }
+    }
+  }
   const isAdminRoute = String(to.name ?? '').startsWith('admin')
   if (!isAdminRoute && !to.meta.requiresAuth && !to.meta.requiresAdmin) return true
   const auth = useAuthStore()

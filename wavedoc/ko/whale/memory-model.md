@@ -3,8 +3,8 @@ translation_set_id: whale-memory-model
 path: whale/memory-model
 locale: ko
 group: whale
-group_order: 5
-order: 4
+group_order: 1
+order: 8
 title: 메모리 모델
 summary: 할당 추적, 초기화된 값의 읽기, 포인터 산술, 레이아웃과 문자열 저장 규칙입니다.
 ---

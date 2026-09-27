@@ -62,6 +62,27 @@ func SeedOfficial(database *storage.Database) (int, error) {
 			return 0, err
 		}
 	}
+	// Retired official pages must disappear from catalogues after a rebuild.
+	// Preserve their revisions and leave independently authored documents alone.
+	for _, locale := range wavedoc.SupportedLocales {
+		for path := range wavedoc.DocumentRedirects {
+			id := "official/" + locale + "/" + path
+			old, err := repository.Document(id)
+			if errors.Is(err, storage.ErrNotFound) {
+				continue
+			}
+			if err != nil {
+				return 0, err
+			}
+			if old.Status != "published" {
+				continue
+			}
+			old.Status = "archived"
+			if err := repository.UpsertDocument(old); err != nil {
+				return 0, err
+			}
+		}
+	}
 	if err := database.Set(marker, []byte("complete")); err != nil {
 		return 0, err
 	}
@@ -69,7 +90,14 @@ func SeedOfficial(database *storage.Database) (int, error) {
 }
 
 func readOfficialDocuments() ([]seedDocument, []byte, error) {
-	return readOfficialDocumentsFrom(wavedoc.Content)
+	documents, digest, err := readOfficialDocumentsFrom(wavedoc.Content)
+	if err != nil {
+		return nil, nil, err
+	}
+	hash := sha256.New()
+	_, _ = hash.Write(digest)
+	_, _ = hash.Write(wavedoc.RedirectData)
+	return documents, hash.Sum(nil), nil
 }
 
 func readOfficialDocumentsFrom(sourceFS fs.FS) ([]seedDocument, []byte, error) {

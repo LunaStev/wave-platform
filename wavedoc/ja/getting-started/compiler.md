@@ -6,28 +6,28 @@ group: getting-started
 group_order: 1
 order: 3
 title: コンパイラコマンドリファレンス
-summary: ビルド、検査、実行、リンク、ターゲット照会、ビルドツール連携に使う wavec コマンドを説明します。
+summary: wavecコマンド、ビルドパイプライン、出力、ターゲット、診断、依存関係、およびツールクエリについて説明します。
 ---
 
 ## コマンドモデル
 
-`wavec` はコンパイラの CLI です。個別の入力を直接コンパイルし、ツールにコンパイラ機能を公開し、インストール済み標準ライブラリのソースを管理できます。
+`wavec`はコンパイラCLIです。個々の入力を直接コンパイルし、ツールにコンパイラサポート情報を提供し、インストールされている標準ライブラリソースを管理します。
 
 ```text
 wavec [global-options] <command> [command-options]
 ```
 
-| コマンド | 用途 |
+|コマンド|用途|
 | --- | --- |
-| `wavec build <input...>` | フラグで選択された検査、コード生成、リンク、実行のパイプラインを処理します。 |
-| `wavec check <file>` | `build <file> --emit=check` の別名です。 |
-| `wavec run <file> [-- <args...>]` | `build <file> --run` の別名です。`--` 以降の引数はプログラムへ渡されます。 |
-| `wavec print <item>` | ターゲットとツールチェーンの機能を照会します。 |
-| `wavec install std` | 標準ライブラリをインストールします。 |
-| `wavec update std` | インストール済み標準ライブラリを更新します。 |
-| `wavec --version` | コンパイラと LLVM バックエンドのバージョンを表示します。 |
+| `wavec build <input...>` |フラグに従ってチェック、コード生成、リンク、または実行パイプラインを実行します。|
+| `wavec check <file>` |`build <file> --emit=check`のエイリアスです。|
+| `wavec run <file> [-- <args...>]` |`build <file> --run`のエイリアスで、`--`の後の引数をプログラムに渡します。|
+| `wavec print <item>` |ターゲットとツールチェーンのサポート情報を問い合わせます。|
+| `wavec install std` |標準ライブラリをインストールします。|
+| `wavec update std` |インストールされている標準ライブラリを更新します。|
+| `wavec --version` |インストールしたバージョン情報を出力します。|
 
-インストール済みコンパイラが提供する完全なオプション一覧は `wavec --help` で確認できます。
+`wavec --help`でコマンドとオプションの完全なリストを見ることができます。
 
 ## ビルド、検査、実行
 
@@ -37,18 +37,18 @@ wavec check main.wave
 wavec run main.wave -- first-argument second-argument
 ```
 
-`build` は既定で実行ファイルを生成します。`check` はフロントエンド検証後に停止します。`run` にはバイナリ出力が必要で、共有ライブラリのビルドとは併用できません。
+`build`はデフォルトで実行ファイルを作成します。 `check`はフロントエンド検査を終えた後停止します。 `run`はバイナリ出力が必要で、共有ライブラリのビルドでは使用できません。
 
-コンパイル、リンク、実行を行わずに要求を検証し、予定されている段階を確認するには `--dry-run` を使います。
+コンパイル、リンク、実行なしで要求を検証し、実行する手順を確認するには、`--dry-run`を使用します。
 
 ```shell
 wavec build main.wave --target riscv64-unknown-linux-gnu --dry-run
 wavec build main.wave --dry-run --error-format=json
 ```
 
-JSON 形式は Vex などのビルドツールが使用する安定した連携インターフェースです。
+JSONフォーマットは、Vexのようなビルドツールが使用する安定した統合インターフェースです。
 
-## 出力形式と入力形式
+## emitと入力種類
 
 ```shell
 wavec build main.wave --emit=ast
@@ -59,30 +59,30 @@ wavec build main.wave --emit=obj -o main.o
 wavec build main.wave --emit=bin -o app
 ```
 
-アーティファクトの出力形式は `ast`、`ir`、`bc`、`asm`、`obj`、`bin` です。`check` は制御モードであり、単独で使用します。パイプラインが許可する場合は、複数のアーティファクト形式をカンマ区切りで指定できます。
+出力エミットの種類は `ast`、`ir`、`bc`、`asm`、`obj`、`bin`です。 `check`は制御モードなので、単独で使用する必要があります。パイプラインで許可される出力の種類は、カンマで複数指定できます。
 
-受け付ける入力形式は `wave`、`ir`、`bc`、`asm`、`obj`、`archive` です。`--input-type=<kind>` はすべての入力形式をひとつに固定します。オブジェクトまたはアーカイブ入力をバイナリへリンクするときは `--link-only` を使います。
+入力種類は`wave`、`ir`、`bc`、`asm`、`obj`、`archive`です。 `--input-type=<kind>`はすべての入力の種類を強制的に指定します。 objectまたはarchive入力のみリンクするときは、バイナリemitと`--link-only`を使用します。
 
 ```shell
 wavec build module.o --input-type=obj --link-only --emit=bin -o app
 ```
 
-## 出力先
+## 出力位置
 
-| オプション | 効果 |
+|オプション|効果|
 | --- | --- |
-| `-o <file>` | 主出力のパスを設定します。 |
-| `--out-dir <dir>` | 生成されたアーティファクトを指定ディレクトリに配置します。 |
-| `--target-dir <dir>` | 中間生成物と既定アーティファクトのルートを指定します。 |
+| `-o <file>` |メイン出力パスを指定します。|
+| `--out-dir <dir>` |emit 出力を指定したディレクトリに置きます。|
+| `--target-dir <dir>` |中間出力とデフォルト出力ルートを指定します。|
 
-## 最適化とコンパイラの調査
+## 最適化と診断出力
 
 ```shell
 wavec -O2 build main.wave
 wavec --debug-wave=tokens,ast build main.wave
 ```
 
-最適化レベルは `-O0`、`-O1`、`-O2`、`-O3`、`-Os`、`-Oz`、`-Ofast` です。`--debug-wave` には `tokens`、`ast`、`ir`、`mc`、`hex`、`all` を指定でき、複数の段階はカンマで組み合わせられます。
+最適化ステップは、「-O0」、「-O1」、「-O2」、「-O3」、「-Os」、「-Oz」、「-Ofast」です。 `--debug-wave` には `tokens`、`ast`、`ir`、`mc`、`hex`、`all` を使うことができ、いくつかのステップはコンマで結合できます。
 
 ## ネイティブリンク
 
@@ -93,29 +93,29 @@ wavec build main.wave --static -o app
 wavec build main.wave --pie -o app
 ```
 
-`--link=<lib>` はネイティブライブラリを追加し、`-L <path>` は検索パスを追加します。リンクモードには、それぞれの互換性規則に従う `--shared`、`--static`、`--pie`、`--no-pie` があります。
+`--link=<lib>`はネイティブライブラリを追加し、`-L <path>`は検索パスを追加します。リンクモードでは、互換規則に従って`--shared`、`--static`、`--pie`、`--no-pie`を使用します。
 
-バックエンドとリンカーの主な制御オプションは次のとおりです。
+バックエンドとリンカー制御オプションは次のとおりです。
 
-- `--target`、`--cpu`、`--features`、`--abi`、`--sysroot`
-- `-C linker=<path>` と `-C link-arg=<arg>`
-- `-C link-sysroot=<path>` と `-C relocation-model=<model>`
+- `--target`, `--cpu`, `--features`, `--abi`, `--sysroot`
+- `-C linker=<path>`と`-C link-arg=<arg>`
+- `-C link-sysroot=<path>`と`-C relocation-model=<model>`
 - `-C no-default-libs`
 
-カーネルなどのフリースタンディング出力では、適切な `--entry`、`--linker-script`、`--no-start-files` とともに `--freestanding` を使います。
+カーネルのようなプリスタンディング出力は、`--freestanding`とともに環境に合った`--entry`、`--linker-script`、`--no-start-files`設定を使用します。
 
-## 外部パッケージの解決
+## 外部パッケージの解釈
 
 ```shell
 wavec --dep-root .vex/deps build main.wave
 wavec --dep math=/opt/wave-deps/math build main.wave
 ```
 
-`--dep-root <dir>` は外部の `package::module` インポートを解決するためのルートを追加します。`--dep <name>=<path>` はパッケージ名をひとつのディレクトリに固定します。これらはコンパイラとの連携点であり、プロジェクトマニフェスト、依存関係の取得、ロックファイルは Vex が管理します。
+`--dep-root <dir>`は、外部`package::module`importを検索するルートを追加します。 `--dep <name>=<path>`はパッケージ名を1つのディレクトリに固定します。これはコンパイラ統合ポイントであり、プロジェクトmanifest、依存関係のダウンロードとlockfileはVexが担当します。
 
-## 機能の照会
+## サポート機能の問い合わせ
 
-ツール側にコンパイラ機能をハードコードしないでください。インストール済みコンパイラへ照会します。
+ターゲットや成果物の種類を使用するツールは、`wavec print`でサポート情報を問い合わせることができます。
 
 ```shell
 wavec print host-target
@@ -132,8 +132,19 @@ wavec print std-path
 wavec print dep-search-paths
 ```
 
-ほかに照会できる項目として `host`、`default-target`、`target-list` があります。構造化出力に対応する項目では `--format=json` を指定できます。
+`host`、`default-target`、`target-list`などの項目も問合せできます。構造化出力をサポートする項目は、`--format=json`を受け取ります。
 
 ## コンパイラとツールチェーンの境界
 
-`wavec` は Wave ソースをコンパイルし、生成アーティファクト、ターゲット、リンクを制御します。Vex はパッケージマニフェスト、依存グラフ、ロックファイル、再現可能なパッケージビルドを管理します。Whale は独自のコマンドを持つ別の低レベルツールチェーンです。
+`wavec`はソースチェック、コード生成、リンクを担当します。 Vexはパッケージmanifest、依存グラフ、lockfileと再現可能なパッケージビルドを担当します。 Whaleは、独立して実行する低レベルツールチェーンです。
+
+## std パス指定
+
+```shell
+wavec --std-root /absolute/path/to/std check main.wave
+wavec --std-root /absolute/path/to/std run main.wave
+```
+
+指定されたstdパスはインストールパスより優先され、誤ったパスまたは互換性のないstdの場合は失敗します。他のインストールのstdに自動的に置き換えられません。コンパイラに対応するstdを選択してください。
+
+出力 `-o`にはソース・入力ファイルと異なるパスを使用します。 `check`はランタイム動作まで確認しないため、[練習](/docs/ja/practice/input-calculator)では実行結果も確認します。

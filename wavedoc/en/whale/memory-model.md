@@ -3,10 +3,10 @@ translation_set_id: whale-memory-model
 path: whale/memory-model
 locale: en
 group: whale
-group_order: 5
-order: 4
+group_order: 1
+order: 8
 title: Memory model
-summary: Tracked allocations, initialized reads, pointer arithmetic, layout, and string storage.
+summary: Allocation tracking, reading initialized values, pointer arithmetic, layout and string storage rules.
 ---
 
 ## Tracked allocations

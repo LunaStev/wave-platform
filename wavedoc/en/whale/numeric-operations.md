@@ -3,10 +3,10 @@ translation_set_id: whale-numeric-operations
 path: whale/numeric-operations
 locale: en
 group: whale
-group_order: 5
-order: 3
+group_order: 1
+order: 7
 title: Numeric operations
-summary: Integer wrapping, checked arithmetic, shifts, conversion errors, and floating-point results.
+summary: Describes integer wrap, checked operations, shift, type conversion errors, and floating point results.
 ---
 
 ## Integer representation

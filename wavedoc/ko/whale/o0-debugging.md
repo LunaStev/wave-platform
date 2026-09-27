@@ -3,8 +3,8 @@ translation_set_id: whale-o0-debugging
 path: whale/o0-debugging
 locale: ko
 group: whale
-group_order: 5
-order: 5
+group_order: 1
+order: 9
 title: O0와 디버깅
 summary: 계산, 상수식, 저장 공간과 디버그 대응 정보를 보존하는 규칙입니다.
 ---

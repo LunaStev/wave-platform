@@ -100,9 +100,9 @@ func (handler SEOHandler) documentAlternates(base, documentPath string) []seoAlt
 
 func (handler SEOHandler) documentCatalogAlternates(base, project string) []seoAlternate {
 	result := handler.documentAlternates(base, "")
-	if project == "whale" {
+	if project != "wave" {
 		for i := range result {
-			result[i].URL += "/whale"
+			result[i].URL += "/" + project
 		}
 	}
 	return result
@@ -123,10 +123,16 @@ func (handler SEOHandler) htmlContent(metadata pageMetadata) string {
 	body.WriteString(`<main class="public-reader" lang="` + escape(metadata.Language) + `"><nav aria-label="Main navigation"><a href="/">Wave</a><a href="/blog">Blog</a><a href="/releases">Releases</a><a href="/docs/en">Documentation</a></nav>`)
 	if metadata.DocumentProject != "" {
 		body.WriteString(`<nav aria-label="Documentation project">`)
-		for _, project := range []string{"wave", "whale"} {
+		for _, project := range []string{"wave", "stdlib", "whale"} {
 			path, name := "/docs/"+metadata.DocumentLocale, "Wave"
 			if project == "whale" {
 				path, name = path+"/whale", "Whale"
+			}
+			if project == "stdlib" {
+				path, name = path+"/stdlib", "Standard library"
+				if metadata.DocumentLocale == "ko" {
+					name = "표준 라이브러리"
+				}
 			}
 			current := ""
 			if project == metadata.DocumentProject {
