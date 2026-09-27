@@ -39,7 +39,7 @@ For an empty AST (`{"globals":[],"functions":[]}`), the command prints the follo
 
 ```text
 module {
-  format_version 1
+  format_version 2
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
@@ -66,6 +66,8 @@ The object model stores `ObjectTarget` with `format`, `machine`, `endian`, and `
 These checks provide target selection and object identity. Aggregate size, field-offset, and stride queries are available through the IR layout API. Object-file reading, native ABI lowering, and executable linking remain unavailable. The scalar lowering path continues to assign explicit alignment; complete aggregate layout rules are described in the [memory reference](memory-model).
 
 ## Calls and signatures
+
+The IR declaration and call verifier accepts explicit `Whale` and `SysV64` conventions. The convention is part of a `fnptr` type and must match at the call site. Variadic signatures and SysV64 aggregate signatures are rejected. See the [executable call-construction example](ir-reference). This validates IR contracts; machine ABI classification, argument registers/stack placement and native call emission are not yet implemented.
 
 A supported call must have an explicit signature and calling convention. Unsupported signatures are errors; a backend must not approximate them by dropping arguments or substituting a different representation.
 

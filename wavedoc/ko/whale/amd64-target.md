@@ -39,7 +39,7 @@ whale ir lower program.json --target x86_64-whale-linux
 
 ```text
 module {
-  format_version 1
+  format_version 2
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
@@ -66,6 +66,8 @@ Rust에서는 `ir::Target::lookup("x86_64-whale-linux")`로 타깃을 선택하�
 이 검사는 타깃 선택과 오브젝트 식별을 제공합니다. 구조체·배열 등의 크기, 필드 offset, stride는 IR 레이아웃 API로 조회할 수 있습니다. 오브젝트 파일 읽기, native ABI lowering, 실행 파일 링크는 아직 지원하지 않습니다. 스칼라 lowering은 명시적인 정렬을 계속 지정하며, 전체 복합 타입 레이아웃 규칙은 [메모리 참조 문서](memory-model)에 정의되어 있습니다.
 
 ## 호출과 서명
+
+IR 선언·호출 검증기는 명시적인 `Whale`·`SysV64` 규약을 받습니다. 규약은 `fnptr` 타입에 포함되며 호출 위치와 일치해야 합니다. 가변 인자 서명과 SysV64 복합 서명은 거부합니다. [실행 가능한 호출 구성 예제](ir-reference)를 참고하세요. 이는 IR 계약 검증이며, 기계 ABI 분류·인자의 레지스터 및 스택 배치·native 호출 생성은 아직 미지원입니다.
 
 지원되는 호출에는 명시적인 서명과 호출 규약이 필요합니다. 미지원 서명은 오류입니다. 백엔드는 인자를 누락하거나 다른 표현으로 대체해 비슷한 호출을 만들어서는 안 됩니다.
 
