@@ -17,6 +17,7 @@ RUN if [ -f package-lock.json ]; then \
     fi
 
 COPY frontend/ ./
+COPY wavedoc/redirects.json /src/wavedoc/redirects.json
 
 RUN npm run build
 
