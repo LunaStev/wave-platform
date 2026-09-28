@@ -27,6 +27,9 @@ jobs:
             editor/package-lock.json
             frontend/package-lock.json
 
+      - name: Build frontend Docker stage
+        run: docker build --target frontend-builder --progress=plain .
+
       - name: Install editor dependencies
         working-directory: editor
         run: npm ci
