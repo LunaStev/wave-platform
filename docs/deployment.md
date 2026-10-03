@@ -57,7 +57,8 @@ With the production port values above, the site remains available at <http://loc
 
 Private platform data is stored under `./data`. Public LLVM SDK archives and their
 catalog are stored separately under `./toolchains`, mounted read-only by Caddy
-at `/srv/toolchains`. These downloads are not included in Git or Docker images.
+at `/srv/toolchains`. Verified downloads and the catalog are included in Git,
+so the normal Git update deploys them together. They are not copied into Docker images.
 Caddy certificate state is stored in the `caddy-data` Docker volume.
 
 Stop write traffic or stop the application before taking a filesystem-level backup:

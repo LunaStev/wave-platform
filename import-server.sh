@@ -34,8 +34,13 @@ if [[ -d data ]] && [[ -n "$(find data -mindepth 1 -print -quit)" ]]; then
   exit 1
 fi
 if [[ -d toolchains ]] && [[ -n "$(find toolchains -mindepth 1 ! -name .gitkeep -print -quit)" ]]; then
-  echo "Refusing to replace existing toolchain downloads. Import into a fresh clone." >&2
-  exit 1
+  # A fresh clone now contains the published SDKs. Only pristine tracked
+  # downloads may be replaced; local or untracked downloads are preserved.
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1 ||
+     [[ -n "$(git status --porcelain --untracked-files=all --ignored -- toolchains)" ]]; then
+    echo "Refusing to replace existing toolchain downloads. Import into a fresh clone." >&2
+    exit 1
+  fi
 fi
 
 docker compose down --remove-orphans

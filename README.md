@@ -60,8 +60,10 @@ mounted by Caddy, so Vite's existing `/downloads` proxy works without Caddy.
 Only this public directory is served; hidden files, directory listings, and
 symlinks escaping it are rejected. Development responses use `no-cache`.
 Production downloads continue to be served by Caddy's read-only mount.
-Archives, checksums, metadata, and the catalog are runtime files excluded from
-Git and Docker build contexts; publish them into this directory separately.
+Verified archives, checksums, metadata, and the catalog are committed together
+under `toolchains/`. A Git checkout or pull supplies the download files; no
+separate upload is required. They are excluded only from Docker build contexts
+because Caddy serves the checked-out directory through its read-only mount.
 
 Published files use the layout
 `llvm/<version>/<revision>/wave-llvm-<version>-<target>-<revision>.tar.xz`,
@@ -72,8 +74,8 @@ contains `target`, `llvm_version`, `revision`, `filename`, `size_bytes`, `sha256
 followed by the relative archive path. Supported targets are `linux-riscv64`
 and `linux-loong64`; versions must be LLVM 21 and revisions start at `r1`.
 
-Publish verified archives and checksums before adding them to the catalog.
-Keep published revision paths immutable and replace the catalog atomically.
+Commit verified archives and checksums together with their catalog entries.
+Keep published revision paths immutable and deploy through `./restart.sh`.
 An absent catalog or an empty `bundles` array displays the empty state; no SDK
 or placeholder entry is required while builds are in progress.
 Run `cd frontend && npm run test:toolchains` to check catalog and checksum behavior.
