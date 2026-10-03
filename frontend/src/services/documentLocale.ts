@@ -1,16 +1,9 @@
+import localeRegistry from '../../../wavedoc/locales.json' with { type: 'json' }
 import type { DocumentLocale } from './http'
 
-export const documentLocales: Array<{ id: DocumentLocale; label: string }> = [
-  { id: 'en', label: 'English' },
-  { id: 'ko', label: '한국어' },
-  { id: 'ja', label: '日本語' },
-  { id: 'zh', label: '简体中文' },
-  { id: 'es', label: 'Español' },
-  { id: 'de', label: 'Deutsch' },
-  { id: 'ru', label: 'Русский' },
-  { id: 'id', label: 'Bahasa Indonesia · Melayu' },
-  { id: 'vi', label: 'Tiếng Việt' },
-]
+export const documentLocales: Array<{ id: DocumentLocale; label: string }> = localeRegistry.map(
+  ({ id, label }) => ({ id: id as DocumentLocale, label }),
+)
 
 const supported = new Set<DocumentLocale>(documentLocales.map((item) => item.id))
 

@@ -1,12 +1,13 @@
 package handler
 
 import (
+	"github.com/wavefnd/wave-platform/wavedoc"
 	"net/http/httptest"
 	"testing"
 )
 
 func TestDocumentLocaleSupportsCanonicalDocumentationLocales(t *testing.T) {
-	for _, locale := range []string{"en", "ko", "ja", "zh", "es", "de", "ru", "id", "vi"} {
+	for _, locale := range wavedoc.SupportedLocales {
 		request := httptest.NewRequest("GET", "/api/v1/documents?locale="+locale, nil)
 		writer := httptest.NewRecorder()
 		got, ok := documentLocale(writer, request)
@@ -21,5 +22,15 @@ func TestDocumentLocaleRejectsSeparateMalayLocale(t *testing.T) {
 	writer := httptest.NewRecorder()
 	if locale, ok := documentLocale(writer, request); ok || locale != "" || writer.Code != 400 {
 		t.Fatalf("locale=%q ok=%v status=%d", locale, ok, writer.Code)
+	}
+}
+
+func TestDocumentLocaleRejectsRegionalVariants(t *testing.T) {
+	for _, locale := range []string{"pt-BR", "pt-PT", "fr-CA", "zh-Hant"} {
+		request := httptest.NewRequest("GET", "/api/v1/documents?locale="+locale, nil)
+		response := httptest.NewRecorder()
+		if _, ok := documentLocale(response, request); ok || response.Code != 400 {
+			t.Fatalf("regional locale %q accepted", locale)
+		}
 	}
 }

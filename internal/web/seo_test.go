@@ -15,7 +15,6 @@ import (
 	blogdomain "github.com/wavefnd/wave-platform/internal/blog"
 	documentdomain "github.com/wavefnd/wave-platform/internal/document"
 	"github.com/wavefnd/wave-platform/internal/storage"
-	"github.com/wavefnd/wave-platform/wavedoc"
 )
 
 func TestBlogMetadataUsesPublishedPostData(t *testing.T) {
@@ -177,7 +176,8 @@ func TestDocumentationSEOUsesCanonicalLocalePaths(t *testing.T) {
 	}
 	seo := NewSEOHandler("https://wave.example", documentdomain.NewRepository(database), nil, nil, nil, nil)
 
-	for _, locale := range wavedoc.SupportedLocales {
+	for _, translation := range documentdomain.NewRepository(database).PublishedTranslations("language/explicit-memory-type-model") {
+		locale := translation.Locale
 		path := "/docs/" + locale + "/language/explicit-memory-type-model"
 		metadata := seo.HTMLMetadata(httptest.NewRequest(http.MethodGet, path, nil))
 		if !strings.Contains(metadata, `rel="canonical" href="https://wave.example`+path+`"`) {

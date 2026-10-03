@@ -4,7 +4,7 @@ This directory is the canonical source for the documentation published at
 `/docs`. Documentation locales are independent from the site interface.
 
 Supported locales are `en`, `ko`, `ja`, `zh`, `es`, `de`, `ru`, `id`, and
-`vi`. The `zh` locale is Simplified Chinese. The `id` locale covers the
+`vi`, `pt`, `fr`, `pl`, `nl`, `tr`, and `it`. The `zh` locale is Simplified Chinese. The `id` locale covers the
 Indonesian–Malay translation; a separate `ms` locale is intentionally not
 published.
 
@@ -39,3 +39,7 @@ separate `learn` collection. Build, linking, package management, and CLI materia
 live under `{locale}/whale/`. Moved URLs are recorded in `redirects.json`, shared
 by the server and browser. Startup seeding archives retired official pages while
 preserving their revisions and independently authored documents.
+
+New locales may start without translations and grow one document at a time.
+See [translation contribution rules](../docs/translation-contributing.md) for
+writing systems, metadata, checks, and the partial-coverage policy.

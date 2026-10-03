@@ -91,7 +91,7 @@ export interface DocumentSummary {
   summary: string
 }
 
-export type DocumentLocale = 'en' | 'ko' | 'ja' | 'zh' | 'es' | 'de' | 'ru' | 'id' | 'vi'
+export type DocumentLocale = 'en' | 'ko' | 'ja' | 'zh' | 'es' | 'de' | 'ru' | 'id' | 'vi' | 'pt' | 'fr' | 'pl' | 'nl' | 'tr' | 'it'
 
 export interface DocumentBlock {
   kind: 'heading' | 'paragraph' | 'note' | 'warning' | 'code' | 'list' | 'table'

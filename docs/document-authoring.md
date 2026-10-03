@@ -2,7 +2,7 @@
 
 The editable source for the official Wave documentation is stored in the root
 `wavedoc/{locale}` module. Documentation supports `en`, `ko`, `ja`, `zh`, `es`,
-`de`, `ru`, `id`, and `vi`. The `zh` locale is Simplified Chinese, and `id`
+`de`, `ru`, `id`, `vi`, `pt`, `fr`, `pl`, `nl`, `tr`, and `it`. The `zh` locale is Simplified Chinese, and `id`
 covers the Indonesian–Malay documentation without a separate `ms` locale.
 
 ```text
@@ -130,8 +130,10 @@ signature list or repeat generic cautions to increase page length.
 
 ## Keeping translations complete
 
-The Korean course is the source for the corresponding pages in all eight other
-locales. Translate the full explanations, tables, exercises, and worked answers.
+The Korean course is the source for corresponding pages in all other locales.
+The six new locales may be translated one document at a time; existing complete
+locales retain full coverage. See [translation contribution rules](translation-contributing.md)
+for language codes, writing systems, and the single-document workflow. Translate the full explanations, tables, exercises, and worked answers.
 Keep fenced programs, commands, input, and output unchanged, including indentation
 and blank lines. Preserve API names and language syntax in prose. Use localised
 links so that readers stay in their selected language.

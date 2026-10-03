@@ -15,7 +15,9 @@ import PatchesPage from '../pages/PatchesPage.vue'
 import SearchPage from '../pages/SearchPage.vue'
 import SourcePage from '../pages/SourcePage.vue'
 import { useAuthStore } from '../stores/auth'
-import { initialDocumentLocale } from '../services/documentLocale'
+import { documentLocales, initialDocumentLocale } from '../services/documentLocale'
+
+const documentLocalePattern = documentLocales.map(({ id }) => id).join('|')
 
 const router = createRouter({
   history: createWebHistory(),
@@ -34,10 +36,10 @@ const router = createRouter({
 		{ path: 'releases', name: 'releases', component: BlogPage, meta: { blogCategory: 'release' } },
 		{ path: 'releases/:slug', name: 'release-detail', component: BlogPage, meta: { blogCategory: 'release' } },
         { path: 'docs', name: 'docs', redirect: () => ({ name: 'docs-locale', params: { docLocale: initialDocumentLocale() } }) },
-        { path: 'docs/:docLocale(en|ko|ja|zh|es|de|ru|id|vi)', name: 'docs-locale', component: DocsPage },
-        { path: 'docs/:docLocale(en|ko|ja|zh|es|de|ru|id|vi)/stdlib', name: 'docs-stdlib', component: DocsPage, meta: { documentationProject: 'stdlib' } },
-        { path: 'docs/:docLocale(en|ko|ja|zh|es|de|ru|id|vi)/whale', name: 'docs-whale', component: DocsPage, meta: { documentationProject: 'whale' } },
-        { path: 'docs/:docLocale(en|ko|ja|zh|es|de|ru|id|vi)/:pathMatch(.*)*', name: 'document', component: DocsPage },
+        { path: `docs/:docLocale(${documentLocalePattern})`, name: 'docs-locale', component: DocsPage },
+        { path: `docs/:docLocale(${documentLocalePattern})/stdlib`, name: 'docs-stdlib', component: DocsPage, meta: { documentationProject: 'stdlib' } },
+        { path: `docs/:docLocale(${documentLocalePattern})/whale`, name: 'docs-whale', component: DocsPage, meta: { documentationProject: 'whale' } },
+        { path: `docs/:docLocale(${documentLocalePattern})/:pathMatch(.*)*`, name: 'document', component: DocsPage },
         { path: 'docs/:pathMatch(.*)*', name: 'document-legacy', redirect: (to) => ({
           name: 'document', params: { docLocale: initialDocumentLocale(), pathMatch: to.params.pathMatch },
         }) },

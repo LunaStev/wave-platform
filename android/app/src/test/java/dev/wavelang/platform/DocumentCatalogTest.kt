@@ -49,6 +49,10 @@ class DocumentCatalogTest {
         assertEquals("ko", initialDocumentLocale("ko", "en"))
         assertEquals("id", initialDocumentLocale(null, "ms"))
         assertEquals("ja", initialDocumentLocale("invalid", "ja"))
-        assertEquals("en", initialDocumentLocale(null, "fr"))
+        assertEquals("en", initialDocumentLocale(null, "unknown"))
+        for (locale in listOf("pt", "fr", "pl", "nl", "tr", "it")) {
+            assertEquals(locale, initialDocumentLocale(null, locale))
+            assertEquals(locale, initialDocumentLocale(locale, "en"))
+        }
     }
 }
