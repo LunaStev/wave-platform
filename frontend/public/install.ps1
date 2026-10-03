@@ -81,11 +81,29 @@ function Get-PublishedHash($SumsPath, $FileName) {
 
 function Assert-Checksum($ArchivePath, $SumsPath, $FileName) {
     $expected = Get-PublishedHash $SumsPath $FileName
-    if ([string]::IsNullOrWhiteSpace($expected)) {
+    Assert-Hash $ArchivePath $expected $FileName
+}
+
+function Get-WaveReleaseAsset($ReleaseVersion, $FileNames) {
+    $release = Invoke-RestMethod -Headers @{ Accept = "application/vnd.github+json" } -Uri "https://api.github.com/repos/$WaveRepo/releases/tags/$ReleaseVersion"
+    foreach ($name in $FileNames) {
+        $assets = @($release.assets | Where-Object { $_.name -ceq $name })
+        if ($assets.Count -eq 0) { continue }
+        if ($assets.Count -ne 1 -or $assets[0].state -ne 'uploaded' -or
+            $assets[0].digest -cnotmatch '^sha256:[0-9A-Fa-f]{64}$') {
+            Fail "No valid GitHub SHA-256 was published for $name."
+        }
+        return $assets[0]
+    }
+    Fail "No Windows x86_64 archive was published for $ReleaseVersion."
+}
+
+function Assert-Hash($ArchivePath, $expected, $FileName) {
+    if ($expected -notmatch '^[0-9A-Fa-f]{64}$') {
         Fail "No valid checksum was published for $FileName."
     }
     $actual = (Get-FileHash -LiteralPath $ArchivePath -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($actual -ne $expected) {
+    if ($actual -ne $expected.ToLowerInvariant()) {
         Fail "Checksum verification failed for $FileName."
     }
     Write-Info "Verified SHA-256: $FileName"
@@ -154,13 +172,17 @@ if ([string]::IsNullOrWhiteSpace($VexVersion)) {
 }
 Assert-Version $VexVersion
 
-$waveFileSuffix = "x86_64-pc-windows-gnu"
+# Prefer the supported MSVC package; retain older versioned GNU downloads.
+$waveAsset = Get-WaveReleaseAsset $Version @(
+    "wave-$Version-x86_64-pc-windows-msvc.zip",
+    "wave-$Version-x86_64-pc-windows-gnu.zip"
+)
 $vexFileSuffix = "x86_64-pc-windows-msvc"
-$waveFileName = "wave-$Version-$waveFileSuffix.zip"
+$waveFileName = $waveAsset.name
+$waveDigest = $waveAsset.digest.Substring(7)
 $vexFileName = "vex-$VexVersion-$vexFileSuffix.zip"
 $waveUrl = "https://github.com/$WaveRepo/releases/download/$Version/$waveFileName"
 $vexUrl = "https://github.com/$VexRepo/releases/download/$VexVersion/$vexFileName"
-$waveSumsUrl = "https://github.com/$WaveRepo/releases/download/$Version/SHA256SUMS"
 $vexSumsUrl = "https://github.com/$VexRepo/releases/download/$VexVersion/SHA256SUMS"
 
 if ($env:WAVE_INSTALL_DIR) {
@@ -177,7 +199,6 @@ $stageDir = "$installDir.new.$PID"
 $backupDir = "$installDir.old.$PID"
 $waveDownloadPath = Join-Path $tempRoot $waveFileName
 $vexDownloadPath = Join-Path $tempRoot $vexFileName
-$waveSumsPath = Join-Path $tempRoot "WAVE_SHA256SUMS"
 $vexSumsPath = Join-Path $tempRoot "VEX_SHA256SUMS"
 $waveExtractRoot = Join-Path $tempRoot "wave"
 $vexExtractRoot = Join-Path $tempRoot "vex"
@@ -190,11 +211,10 @@ try {
     Invoke-WebRequest -UseBasicParsing -Uri $waveUrl -OutFile $waveDownloadPath
     Write-Info "Download: $vexUrl"
     Invoke-WebRequest -UseBasicParsing -Uri $vexUrl -OutFile $vexDownloadPath
-    Invoke-WebRequest -UseBasicParsing -Uri $waveSumsUrl -OutFile $waveSumsPath
     Invoke-WebRequest -UseBasicParsing -Uri $vexSumsUrl -OutFile $vexSumsPath
 
     Write-Step "[2/4] Verifying release archives..."
-    Assert-Checksum $waveDownloadPath $waveSumsPath $waveFileName
+    Assert-Hash $waveDownloadPath $waveDigest $waveFileName
     Assert-Checksum $vexDownloadPath $vexSumsPath $vexFileName
 
     Write-Step "[3/4] Installing Wave toolchain..."
@@ -203,7 +223,7 @@ try {
     Expand-Archive -Force -Path $waveDownloadPath -DestinationPath $waveExtractRoot
     Expand-Archive -Force -Path $vexDownloadPath -DestinationPath $vexExtractRoot
 
-    $wavePackageDir = Join-Path $waveExtractRoot ("wave-$Version-$waveFileSuffix")
+    $wavePackageDir = Join-Path $waveExtractRoot ([System.IO.Path]::GetFileNameWithoutExtension($waveFileName))
     $vexPackageDir = Join-Path $vexExtractRoot ("vex-$VexVersion-$vexFileSuffix")
 
     if (-not (Test-Path -LiteralPath $wavePackageDir -PathType Container)) {
