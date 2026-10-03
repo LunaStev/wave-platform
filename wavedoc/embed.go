@@ -8,7 +8,44 @@ import (
 	"encoding/json"
 )
 
-var SupportedLocales = []string{"en", "ko", "ja", "zh", "es", "de", "ru", "id", "vi"}
+type Locale struct {
+	ID        string `json:"id"`
+	Label     string `json:"label"`
+	Script    string `json:"script"`
+	OpenGraph string `json:"openGraph"`
+	Complete  bool   `json:"complete"`
+}
+
+// LocaleData is shared by the server, browser, and translation checker.
+//
+//go:embed locales.json
+var LocaleData []byte
+
+var Locales = func() []Locale {
+	var locales []Locale
+	if err := json.Unmarshal(LocaleData, &locales); err != nil {
+		panic(err)
+	}
+	return locales
+}()
+
+var SupportedLocales = func() []string {
+	var locales []string
+	for _, locale := range Locales {
+		locales = append(locales, locale.ID)
+	}
+	return locales
+}()
+
+// RequiresCompleteCoverage keeps existing complete locales in sync with Korean.
+func RequiresCompleteCoverage(id string) bool {
+	for _, locale := range Locales {
+		if locale.ID == id {
+			return locale.Complete
+		}
+	}
+	return false
+}
 
 // Content contains every translated Markdown document below this directory.
 //

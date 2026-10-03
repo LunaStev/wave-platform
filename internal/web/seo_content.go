@@ -11,6 +11,7 @@ import (
 
 	"github.com/microcosm-cc/bluemonday"
 	documentdomain "github.com/wavefnd/wave-platform/internal/document"
+	"github.com/wavefnd/wave-platform/wavedoc"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
@@ -18,7 +19,7 @@ import (
 	goldhtml "github.com/yuin/goldmark/renderer/html"
 )
 
-var documentationLocales = []string{"en", "ko", "ja", "zh", "es", "de", "ru", "id", "vi"}
+var documentationLocales = wavedoc.SupportedLocales
 
 var publicMarkdown = goldmark.New(goldmark.WithExtensions(extension.GFM), goldmark.WithParserOptions(parser.WithAutoHeadingID()), goldmark.WithRendererOptions(goldhtml.WithUnsafe()))
 var publicHTMLPolicy = func() *bluemonday.Policy {
@@ -67,9 +68,10 @@ func (ids *publicHeadingIDs) Generate(value []byte, _ ast.NodeKind) []byte {
 }
 
 func openGraphLocale(language string) string {
-	locales := map[string]string{"en": "en_US", "ko": "ko_KR", "ja": "ja_JP", "zh": "zh_CN", "es": "es_ES", "de": "de_DE", "ru": "ru_RU", "id": "id_ID", "vi": "vi_VN"}
-	if locale := locales[language]; locale != "" {
-		return locale
+	for _, locale := range wavedoc.Locales {
+		if locale.ID == language {
+			return locale.OpenGraph
+		}
 	}
 	return language
 }

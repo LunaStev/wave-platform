@@ -21,6 +21,7 @@ const query = ref('')
 const loading = ref(true)
 const failed = ref(false)
 const showingEnglishFallback = ref(false)
+const hasEnglishFallbackItems = computed(() => docLocale.value !== 'en' && documents.value.some(item => item.locale === 'en'))
 
 const docLocale = computed<DocumentLocale>(() => isDocumentLocale(route.params.docLocale) ? route.params.docLocale : 'en')
 const docBase = computed(() => `/docs/${docLocale.value}`)
@@ -203,6 +204,7 @@ watchEffect(() => {
 
     <div v-else class="docs-width docs-catalog-page">
       <header class="docs-titlebar"><h1>{{ projectName }} {{ t('docs.title') }}</h1><p>{{ project === 'stdlib' ? t('docs.stdlibLead') : project === 'whale' ? t('docs.whaleLead') : t('docs.lead') }}</p></header>
+      <p v-if="hasEnglishFallbackItems" class="docs-translation-notice" role="status">{{ t('docs.englishFallbackCatalog') }}</p>
       <div class="docs-catalog">
         <section v-for="group in groups" :key="group.id" class="docs-catalog-group">
           <h2>{{ group.title }}</h2>

@@ -104,6 +104,7 @@ func TestTranslatedSitemapAndFallbackHTML(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := "/language/explicit-memory-type-model"
+	translations := documentdomain.NewRepository(db).PublishedTranslations(strings.TrimPrefix(path, "/"))
 	seen := map[string]bool{}
 	for _, item := range set.URLs {
 		if seen[item.Location] {
@@ -111,7 +112,7 @@ func TestTranslatedSitemapAndFallbackHTML(t *testing.T) {
 		}
 		seen[item.Location] = true
 		if strings.HasSuffix(item.Location, path) {
-			if item.LastModified == "" || len(item.Alternates) != len(wavedoc.SupportedLocales)+1 {
+			if item.LastModified == "" || len(item.Alternates) != len(translations)+1 {
 				t.Fatalf("alternates or lastmod missing: %#v", item)
 			}
 			for _, alt := range item.Alternates {
@@ -121,7 +122,8 @@ func TestTranslatedSitemapAndFallbackHTML(t *testing.T) {
 			}
 		}
 	}
-	for _, locale := range wavedoc.SupportedLocales {
+	for _, translation := range translations {
+		locale := translation.Locale
 		if !seen["https://wave.example/docs/"+locale+path] {
 			t.Fatalf("missing %s", locale)
 		}

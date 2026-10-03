@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { documentLocales, isDocumentLocale, initialDocumentLocale } from '../src/services/documentLocale.ts'
 import { canonicalDocumentPath, documentationCatalog, documentationPath, documentationProject, projectDocuments } from '../src/services/documentNavigation.ts'
 
 test('URL selects the project and separates catalogue from document paths', () => {
@@ -11,7 +12,7 @@ test('URL selects the project and separates catalogue from document paths', () =
   assert.equal(documentationPath('whale'), '')
   assert.equal(documentationProject('whale/overview'), 'whale')
   assert.equal(documentationPath('whale/overview'), 'whale/overview')
-  for (const locale of ['en', 'ko', 'ja', 'zh', 'es', 'de', 'ru', 'id', 'vi']) {
+  for (const locale of documentLocales.map(({ id }) => id)) {
     assert.equal(documentationCatalog(locale, 'wave'), `/docs/${locale}`)
     assert.equal(documentationCatalog(locale, 'whale'), `/docs/${locale}/whale`)
   }
@@ -68,4 +69,26 @@ test('retired lesson and toolchain URLs point at the single canonical collection
   assert.equal(canonicalDocumentPath('getting-started/design-goals'), 'getting-started/overview')
   assert.equal(canonicalDocumentPath('language/control-flow'), 'language/control-flow')
   assert.equal(documentationProject(canonicalDocumentPath('toolchain/whale-cli')), 'whale')
+})
+
+
+test('new documentation locales accept language codes and normalize browser regions', (t) => {
+  const originalStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+  const originalNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+  t.after(() => {
+    for (const [key, descriptor] of [['localStorage', originalStorage], ['navigator', originalNavigator]] as const) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor)
+      else Reflect.deleteProperty(globalThis, key)
+    }
+  })
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem: () => null } })
+  for (const [code, device] of [['pt', 'pt-BR'], ['fr', 'fr-CA'], ['pl', 'pl-PL'], ['nl', 'nl-BE'], ['tr', 'tr-TR'], ['it', 'it-IT']]) {
+    Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { language: device } })
+    assert.equal(isDocumentLocale(code), true)
+    assert.equal(isDocumentLocale(device), false)
+    assert.equal(initialDocumentLocale(), code)
+    assert.equal(documentationCatalog(code, 'stdlib'), `/docs/${code}/stdlib`)
+  }
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem: () => 'pt' } })
+  assert.equal(initialDocumentLocale(), 'pt')
 })

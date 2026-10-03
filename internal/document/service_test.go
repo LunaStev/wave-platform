@@ -78,7 +78,7 @@ func TestSeedOfficialPublishesSupportedDocumentationLocales(t *testing.T) {
 	}
 	repository := NewRepository(database)
 	for _, locale := range wavedoc.SupportedLocales {
-		if expectedCounts[locale] == 0 || expectedCounts[locale] != expectedCounts["ko"] {
+		if wavedoc.RequiresCompleteCoverage(locale) && (expectedCounts[locale] == 0 || expectedCounts[locale] != expectedCounts["ko"]) {
 			t.Fatalf("%s has %d documents; Korean has %d", locale, expectedCounts[locale], expectedCounts["ko"])
 		}
 		items, err := repository.Summaries(locale)
@@ -118,7 +118,8 @@ func TestOfficialInstallDocumentsIncludeWindowsInstaller(t *testing.T) {
 		t.Fatal(err)
 	}
 	repository := NewRepository(database)
-	for _, locale := range wavedoc.SupportedLocales {
+	for _, translation := range repository.PublishedTranslations("getting-started/install") {
+		locale := translation.Locale
 		install, err := repository.Published(locale, "getting-started/install")
 		if err != nil {
 			t.Fatal(err)

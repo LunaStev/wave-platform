@@ -287,7 +287,7 @@ func (handler SEOHandler) htmlMetadata(metadata pageMetadata, publicURL string) 
 	}
 	website := map[string]any{
 		"@type": "WebSite", "@id": websiteID, "name": "Wave Programming Language", "url": base + "/",
-		"publisher": map[string]any{"@id": organizationID}, "inLanguage": []string{"en", "ko", "ja", "zh", "es", "de", "ru", "id", "vi"},
+		"publisher": map[string]any{"@id": organizationID}, "inLanguage": wavedoc.SupportedLocales,
 	}
 	pageType := metadata.SchemaType
 	if isArticleSchema(pageType) || pageType == "WebSite" {
@@ -914,10 +914,5 @@ func languageForPath(requestPath string) string {
 }
 
 func supportedDocumentLocale(value string) bool {
-	switch value {
-	case "en", "ko", "ja", "zh", "es", "de", "ru", "id", "vi":
-		return true
-	default:
-		return false
-	}
+	return wavedoc.SupportsLocale(value)
 }

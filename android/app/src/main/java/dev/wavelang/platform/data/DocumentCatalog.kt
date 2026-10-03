@@ -13,7 +13,7 @@ import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
 
 const val API_NAMESPACE = "https://wave-lang.dev/ns/platform/api/v1"
-val documentLocales = listOf("en", "ko", "ja", "zh", "es", "de", "ru", "id", "vi")
+val documentLocales = listOf("en", "ko", "ja", "zh", "es", "de", "ru", "id", "vi", "pt", "fr", "pl", "nl", "tr", "it")
 
 enum class DocumentationProject { Wave, Whale }
 

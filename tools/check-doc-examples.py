@@ -23,6 +23,7 @@ def main():
     args = parser.parse_args()
     examples = {}
     paths = set()
+    locales = {item['id'] for item in json.loads((ROOT / 'wavedoc/locales.json').read_text())}
     docs = list((ROOT / 'wavedoc').glob('*/*/*.md'))
     translations = []
     for file in docs:
@@ -41,9 +42,9 @@ def main():
         if name not in examples or examples[name][1] != code:
             raise ValueError(f'{file}: translated example {name} differs from Korean source')
     for file in docs:
-        for locale, path in re.findall(r'\]\(/docs/(\w+)(?:/([^\s)#]*))?(?:#[^\s)]*)?\)', file.read_text()):
+        for locale, path in re.findall(r'\]\(/docs/([\w-]+)(?:/([^\s)#]*))?(?:#[^\s)]*)?\)', file.read_text()):
             path = path or ''
-            if path not in ('', 'stdlib', 'whale') and (locale, path) not in paths:
+            if locale not in locales or (path not in ('', 'stdlib', 'whale') and (locale, path) not in paths and ('en', path) not in paths):
                 raise ValueError(f'{file}: broken link /docs/{locale}/{path}')
     print('Documentation links and translated examples: PASS', flush=True)
     cases = json.loads((ROOT / 'wavedoc/examples.json').read_text())

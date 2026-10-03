@@ -45,6 +45,8 @@ private val languageNames = mapOf(
     "en" to "English", "ko" to "한국어", "ja" to "日本語", "zh" to "简体中文",
     "es" to "Español", "de" to "Deutsch", "ru" to "Русский",
     "id" to "Bahasa Indonesia · Melayu", "vi" to "Tiếng Việt",
+    "pt" to "Português", "fr" to "Français", "pl" to "Polski",
+    "nl" to "Nederlands", "tr" to "Türkçe", "it" to "Italiano",
 )
 
 @Composable

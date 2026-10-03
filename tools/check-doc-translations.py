@@ -6,10 +6,14 @@ regressions; technical meaning and natural phrasing still need editorial review.
 """
 from pathlib import Path, PurePosixPath
 import re
+import json
+import argparse
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / 'wavedoc'
-LOCALES = ['en', 'ja', 'zh', 'es', 'de', 'ru', 'id', 'vi']
+REGISTRY = json.loads((DOCS / 'locales.json').read_text())
+LOCALES = [item['id'] for item in REGISTRY if item['id'] != 'ko']
+COMPLETE = {item['id'] for item in REGISTRY if item['complete']}
 FENCE = re.compile(r'^```[^\n]*\n.*?^```[ \t]*$', re.M | re.S)
 MARKER = re.compile(r'<!-- wave-example: ([a-z0-9-]+) -->')
 LINK = re.compile(r'\]\(([^\s)]+)\)')
@@ -31,17 +35,32 @@ def structure(text):
     }
 
 
+def coverage_errors(source, actual, locale):
+    missing = set(source) - set(actual) if locale in COMPLETE else set()
+    return sorted(missing | (set(actual) - set(source)))
+
+
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--locale', action='append', choices=LOCALES,
+                        help='Check only this locale; repeat to select several.')
+    args = parser.parse_args()
+    locales = args.locale or LOCALES
     source = {str(path.relative_to(DOCS / 'ko')): path.read_text()
               for path in (DOCS / 'ko').rglob('*.md')}
     if not source:
         raise SystemExit('No Korean source documents found')
     failures = []
-    for locale in LOCALES:
+    english = {str(path.relative_to(DOCS / 'en')) for path in (DOCS / 'en').rglob('*.md')}
+    checked = 0
+    for locale in locales:
         actual = {str(path.relative_to(DOCS / locale)): path
                   for path in (DOCS / locale).rglob('*.md')}
-        if set(actual) != set(source):
-            failures.append((locale, 'coverage', sorted(set(source) ^ set(actual))))
+        coverage = coverage_errors(source, actual, locale)
+        if coverage:
+            failures.append((locale, 'coverage', coverage))
+        available = set(actual) | english
+        checked += len(actual)
         for name, korean in source.items():
             if name not in actual:
                 continue
@@ -79,11 +98,11 @@ def main():
                         failures.append((locale, name, 'link leaves selected locale: ' + target))
                         continue
                     path = parts[1] if len(parts) > 1 else ''
-                    if path not in ('', 'whale', 'stdlib') and path + '.md' not in actual:
+                    if path not in ('', 'whale', 'stdlib') and path + '.md' not in available:
                         failures.append((locale, name, 'broken link: ' + target))
                 elif not target.startswith('/'):
                     path = str(PurePosixPath(name).parent / target)
-                    if path + '.md' not in actual:
+                    if path + '.md' not in available:
                         failures.append((locale, name, 'broken relative link: ' + target))
         print(f'{locale}: {len(actual)} documents')
 
@@ -91,7 +110,7 @@ def main():
         for issue in failures:
             print('FAIL', *issue)
         raise SystemExit(f'{len(failures)} translation checks failed')
-    print(f'PASS: {len(source)} source documents, {len(source) * len(LOCALES)} translations; '
+    print(f'PASS: {len(source)} source documents, {checked} translations; '
           'code, structure and links match.')
 
 

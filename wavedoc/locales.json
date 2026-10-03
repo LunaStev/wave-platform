@@ -1,0 +1,107 @@
+[
+  {
+    "id": "en",
+    "label": "English",
+    "script": "Latn",
+    "openGraph": "en_US",
+    "complete": true
+  },
+  {
+    "id": "ko",
+    "label": "한국어",
+    "script": "Kore",
+    "openGraph": "ko_KR",
+    "complete": true
+  },
+  {
+    "id": "ja",
+    "label": "日本語",
+    "script": "Jpan",
+    "openGraph": "ja_JP",
+    "complete": true
+  },
+  {
+    "id": "zh",
+    "label": "简体中文",
+    "script": "Hans",
+    "openGraph": "zh_CN",
+    "complete": true
+  },
+  {
+    "id": "es",
+    "label": "Español",
+    "script": "Latn",
+    "openGraph": "es_ES",
+    "complete": true
+  },
+  {
+    "id": "de",
+    "label": "Deutsch",
+    "script": "Latn",
+    "openGraph": "de_DE",
+    "complete": true
+  },
+  {
+    "id": "ru",
+    "label": "Русский",
+    "script": "Cyrl",
+    "openGraph": "ru_RU",
+    "complete": true
+  },
+  {
+    "id": "id",
+    "label": "Bahasa Indonesia · Melayu",
+    "script": "Latn",
+    "openGraph": "id_ID",
+    "complete": true
+  },
+  {
+    "id": "vi",
+    "label": "Tiếng Việt",
+    "script": "Latn",
+    "openGraph": "vi_VN",
+    "complete": true
+  },
+  {
+    "id": "pt",
+    "label": "Português",
+    "script": "Latn",
+    "openGraph": "pt_BR",
+    "complete": false
+  },
+  {
+    "id": "fr",
+    "label": "Français",
+    "script": "Latn",
+    "openGraph": "fr_FR",
+    "complete": false
+  },
+  {
+    "id": "pl",
+    "label": "Polski",
+    "script": "Latn",
+    "openGraph": "pl_PL",
+    "complete": false
+  },
+  {
+    "id": "nl",
+    "label": "Nederlands",
+    "script": "Latn",
+    "openGraph": "nl_NL",
+    "complete": false
+  },
+  {
+    "id": "tr",
+    "label": "Türkçe",
+    "script": "Latn",
+    "openGraph": "tr_TR",
+    "complete": false
+  },
+  {
+    "id": "it",
+    "label": "Italiano",
+    "script": "Latn",
+    "openGraph": "it_IT",
+    "complete": false
+  }
+]
