@@ -63,6 +63,9 @@ jobs:
       - name: Build frontend Docker stage
         run: docker build --target frontend-builder --progress=plain .
 
+      - name: Verify Wave and Vex installation in Docker
+        run: docker build --target wave-toolchain --progress=plain .
+
       - name: Install editor dependencies
         working-directory: editor
         run: npm ci

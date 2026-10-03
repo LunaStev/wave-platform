@@ -22,7 +22,7 @@ COPY wavedoc/redirects.json wavedoc/locales.json /src/wavedoc/
 RUN npm run build
 
 
-FROM golang:1.25-trixie AS application-builder
+FROM golang:1.25-trixie AS wave-toolchain
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -32,6 +32,7 @@ RUN apt-get update \
         cmake \
         curl \
         git \
+        jq \
         pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
@@ -47,6 +48,8 @@ ENV PATH="/root/.wave/bin:${PATH}"
 
 RUN wavec --version
 RUN vex --version
+
+FROM wave-toolchain AS application-builder
 
 WORKDIR /src
 
