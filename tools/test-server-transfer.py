@@ -71,6 +71,19 @@ class ServerTransferTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue((destination / "data" / "record").is_file())
 
+    def test_fresh_clone_with_tracked_downloads(self):
+        archive = self.export(with_toolchains=True)
+        destination = self.installation("destination")
+        (destination / "toolchains").mkdir()
+        (destination / "toolchains" / "sdk.tar.xz").write_bytes(b"SDK fixture")
+        subprocess.run(["git", "init", "-q", str(destination)], check=True)
+        subprocess.run(["git", "-C", str(destination), "add", "toolchains"], check=True)
+        subprocess.run(["git", "-C", str(destination), "-c", "user.name=Transfer Test",
+                        "-c", "user.email=test@example.invalid", "commit", "-qm", "Fixture"], check=True)
+        result = self.run_script(destination, "import-server.sh", archive)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((destination / "toolchains" / "sdk.tar.xz").read_bytes(), b"SDK fixture")
+
     def test_existing_downloads_are_not_overwritten(self):
         archive = self.export(with_toolchains=True)
         destination = self.installation("destination")
