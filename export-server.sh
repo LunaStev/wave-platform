@@ -29,7 +29,11 @@ restore_service() {
 }
 trap restore_service EXIT
 
-tar -czf "$archive_path" -- .env data
+archive_entries=(.env data)
+if [[ -d toolchains ]]; then
+  archive_entries+=(toolchains)
+fi
+tar -czf "$archive_path" -- "${archive_entries[@]}"
 chmod 600 "$archive_path"
 
 restore_service

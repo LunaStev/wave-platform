@@ -25,6 +25,9 @@ jobs:
       - name: Test toolchain downloads and server wiring
         run: go test ./internal/web ./internal/platform
 
+      - name: Test server transfer with toolchain downloads
+        run: python3 tools/test-server-transfer.py
+
   build-and-test:
     runs-on: ubuntu-latest
     timeout-minutes: 15

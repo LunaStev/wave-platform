@@ -17,7 +17,7 @@ fi
 
 while IFS= read -r entry; do
   case "$entry" in
-    .env|data|data/*) ;;
+    .env|data|data/*|toolchains|toolchains/*) ;;
     *)
       echo "Unexpected archive entry: $entry" >&2
       exit 1
@@ -31,6 +31,10 @@ if [[ -e .env ]]; then
 fi
 if [[ -d data ]] && [[ -n "$(find data -mindepth 1 -print -quit)" ]]; then
   echo "Refusing to replace the existing data directory. Import into a fresh clone." >&2
+  exit 1
+fi
+if [[ -d toolchains ]] && [[ -n "$(find toolchains -mindepth 1 ! -name .gitkeep -print -quit)" ]]; then
+  echo "Refusing to replace existing toolchain downloads. Import into a fresh clone." >&2
   exit 1
 fi
 
