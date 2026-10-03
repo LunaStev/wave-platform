@@ -26,6 +26,7 @@ const router = createRouter({
       component: MainLayout,
       children: [
         { path: '', name: 'home', component: HomePage },
+        { path: 'toolchains', name: 'toolchains', component: () => import('../pages/ToolchainsPage.vue') },
 		{ path: 'blog', name: 'blog', component: BlogPage },
 		{ path: 'blog/editor', name: 'blog-editor', component: BlogEditorPage, meta: { requiresAuth: true, requiresAdmin: true } },
 		{ path: 'blog/editor/:slug', name: 'blog-editor-post', component: BlogEditorPage, meta: { requiresAuth: true, requiresAdmin: true } },

@@ -8,7 +8,22 @@
 		X-Content-Type-Options nosniff
 		X-Frame-Options DENY
 	}
-	reverse_proxy wave-platform:8080
+	# Keep the public SDK directory separate from all private platform data.
+	handle_path /downloads/toolchains/* {
+		root * /srv/toolchains
+		header X-Robots-Tag noindex
+		header Cache-Control "no-cache"
+		@bundle path /llvm/*
+		header @bundle Cache-Control "public, max-age=31536000, immutable" {
+			match status 200 206 304
+		}
+		@private path_regexp (^|/)\.
+		respond @private 404
+		file_server
+	}
+	handle {
+		reverse_proxy wave-platform:8080
+	}
 }
 
 {$WAVE_SITE_ADDRESS:http://localhost} {

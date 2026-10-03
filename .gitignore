@@ -1,4 +1,6 @@
 data/
+/toolchains/*
+!/toolchains/.gitkeep
 
 frontend/node_modules/
 editor/node_modules/

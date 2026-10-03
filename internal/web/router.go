@@ -28,6 +28,7 @@ import (
 func NewRouter(
 	environment string,
 	frontendPath string,
+	toolchainsPath string,
 	publicURL string,
 	version string,
 	modules []handler.ModuleStatus,
@@ -197,6 +198,9 @@ func NewRouter(
 		http.Redirect(writer, request, "/blog/"+request.PathValue("slug"), http.StatusPermanentRedirect)
 	})
 
+	if environment == "development" && toolchainsPath != "" {
+		mux.Handle("GET /downloads/toolchains/", developmentToolchainsHandler(toolchainsPath))
+	}
 	mux.Handle("/", frontendHandler(frontendPath, seoHandler))
 
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {

@@ -52,6 +52,32 @@ make run
 
 The development server listens on <http://127.0.0.1:8080>. Run `make frontend-dev` in another terminal when Vite hot reload is needed.
 
+### LLVM toolchain downloads
+
+The `/toolchains` page reads `/downloads/toolchains/index.json`. In development,
+the Go server serves this path from `./toolchains`, the same public directory
+mounted by Caddy, so Vite's existing `/downloads` proxy works without Caddy.
+Only this public directory is served; hidden files, directory listings, and
+symlinks escaping it are rejected. Development responses use `no-cache`.
+Production downloads continue to be served by Caddy's read-only mount.
+Archives, checksums, metadata, and the catalog are runtime files excluded from
+Git and Docker build contexts; publish them into this directory separately.
+
+Published files use the layout
+`llvm/<version>/<revision>/wave-llvm-<version>-<target>-<revision>.tar.xz`,
+with an adjacent `.tar.xz.sha256` file containing the SHA-256 digest and archive
+basename. The catalog uses `schema_version: 1` and a `bundles` array; each entry
+contains `target`, `llvm_version`, `revision`, `filename`, `size_bytes`, `sha256`,
+`url`, and `published_at`. URLs use `https://wave-lang.dev/downloads/toolchains/`
+followed by the relative archive path. Supported targets are `linux-riscv64`
+and `linux-loong64`; versions must be LLVM 21 and revisions start at `r1`.
+
+Publish verified archives and checksums before adding them to the catalog.
+Keep published revision paths immutable and replace the catalog atomically.
+An absent catalog or an empty `bundles` array displays the empty state; no SDK
+or placeholder entry is required while builds are in progress.
+Run `cd frontend && npm run test:toolchains` to check catalog and checksum behavior.
+
 ## Android development
 
 The native Kotlin and Jetpack Compose app lives in [`android/`](android/README.md).
@@ -73,7 +99,8 @@ To move an installation, export it on the old server and import it into a fresh 
 ./import-server.sh wave-platform-transfer-YYYYMMDDTHHMMSSZ.tar.gz
 ```
 
-The transfer archive contains `.env` and the complete `data/` directory. Treat it as a secret.
+The transfer archive contains `.env`, the complete `data/` directory, and
+`toolchains/` when present. Treat it as a secret.
 
 ## Documentation
 

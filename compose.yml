@@ -77,6 +77,10 @@ services:
         source: ./Caddyfile
         target: /etc/caddy/Caddyfile
         read_only: true
+      - type: bind
+        source: ./toolchains
+        target: /srv/toolchains
+        read_only: true
       - caddy-data:/data
       - caddy-config:/config
     healthcheck:

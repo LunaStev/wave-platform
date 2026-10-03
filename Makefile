@@ -12,10 +12,12 @@ frontend-build:
 	cd frontend && npm run build
 
 test:
+	python3 tools/test-server-transfer.py
 	GOCACHE=$(GOCACHE) go test ./...
 	cd frontend && npm run typecheck
 	cd frontend && npm run test:docs
 	cd frontend && npm run test:seo
+	cd frontend && npm run test:toolchains
 
 build: frontend-build
 	mkdir -p bin

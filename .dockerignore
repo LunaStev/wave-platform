@@ -3,5 +3,6 @@
 backups
 build
 data
+toolchains
 frontend/dist
 frontend/node_modules

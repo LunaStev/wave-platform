@@ -220,6 +220,7 @@ func New(configPath string) (*Application, error) {
 	router := web.NewRouter(
 		cfg.Server.Environment,
 		cfg.Frontend.Distribution,
+		"toolchains",
 		cfg.Identity.PublicURL,
 		Version,
 		modules,

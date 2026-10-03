@@ -55,7 +55,10 @@ With the production port values above, the site remains available at <http://loc
 
 ## Data and backups
 
-All persistent platform data is stored under `./data`. Caddy certificate state is stored in the `caddy-data` Docker volume.
+Private platform data is stored under `./data`. Public LLVM SDK archives and their
+catalog are stored separately under `./toolchains`, mounted read-only by Caddy
+at `/srv/toolchains`. These downloads are not included in Git or Docker images.
+Caddy certificate state is stored in the `caddy-data` Docker volume.
 
 Stop write traffic or stop the application before taking a filesystem-level backup:
 
@@ -63,7 +66,7 @@ Stop write traffic or stop the application before taking a filesystem-level back
 docker compose stop wave-platform
 ```
 
-Back up `./data` and the Caddy volumes, then restart the service:
+Back up `./data`, `./toolchains`, and the Caddy volumes, then restart the service:
 
 ```sh
 docker compose start wave-platform
@@ -91,4 +94,8 @@ Copy the generated archive to a fresh clone on the new server, then run:
 ./import-server.sh wave-platform-transfer-YYYYMMDDTHHMMSSZ.tar.gz
 ```
 
-The export briefly stops the application to produce a consistent copy of `.env` and `data/`. The import refuses to overwrite an existing installation. Caddy obtains a new website certificate after the new server starts.
+The export briefly stops the application to produce a consistent copy of `.env`,
+`data/`, and `toolchains/` when present. Pause SDK publishing during the export.
+The import refuses to overwrite an existing installation or existing downloads;
+older archives without `toolchains/` remain supported. Caddy obtains a new
+website certificate after the new server starts.
