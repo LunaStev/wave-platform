@@ -10,6 +10,21 @@ permissions:
   contents: read
 
 jobs:
+  toolchain-downloads:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Test toolchain downloads and server wiring
+        run: go test ./internal/web ./internal/platform
+
   build-and-test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -58,6 +73,10 @@ jobs:
       - name: Run frontend documentation tests
         working-directory: frontend
         run: npm run test:docs
+
+      - name: Run frontend toolchain tests
+        working-directory: frontend
+        run: npm run test:toolchains
 
       - name: Build frontend
         working-directory: frontend

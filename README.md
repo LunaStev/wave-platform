@@ -52,6 +52,30 @@ make run
 
 The development server listens on <http://127.0.0.1:8080>. Run `make frontend-dev` in another terminal when Vite hot reload is needed.
 
+### LLVM toolchain downloads
+
+The `/toolchains` page reads `/downloads/toolchains/index.json`. In development,
+the Go server serves this path from `<storage root>/toolchains` (normally
+`data/toolchains`), so Vite's existing `/downloads` proxy works without Caddy.
+Only this public directory is served; hidden files, directory listings, and
+symlinks escaping it are rejected. Development responses use `no-cache`.
+Production downloads continue to be served by Caddy's read-only mount.
+
+Published files use the layout
+`llvm/<version>/<revision>/wave-llvm-<version>-<target>-<revision>.tar.xz`,
+with an adjacent `.tar.xz.sha256` file containing the SHA-256 digest and archive
+basename. The catalog uses `schema_version: 1` and a `bundles` array; each entry
+contains `target`, `llvm_version`, `revision`, `filename`, `size_bytes`, `sha256`,
+`url`, and `published_at`. URLs use `https://wave-lang.dev/downloads/toolchains/`
+followed by the relative archive path. Supported targets are `linux-riscv64`
+and `linux-loong64`; versions must be LLVM 21 and revisions start at `r1`.
+
+Publish verified archives and checksums before adding them to the catalog.
+Keep published revision paths immutable and replace the catalog atomically.
+An absent catalog or an empty `bundles` array displays the empty state; no SDK
+or placeholder entry is required while builds are in progress.
+Run `cd frontend && npm run test:toolchains` to check catalog and checksum behavior.
+
 ## Android development
 
 The native Kotlin and Jetpack Compose app lives in [`android/`](android/README.md).

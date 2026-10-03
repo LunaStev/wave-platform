@@ -3,7 +3,7 @@ import { computed, onMounted, ref, watchEffect } from 'vue'
 import { Download, RefreshCw } from '@lucide/vue'
 import { useI18n } from '../i18n'
 import { applyPageSEO } from '../services/seo'
-import { formatToolchainSize, parseToolchainCatalog, type ToolchainBundle } from '../services/toolchains'
+import { formatToolchainSize, parseToolchainCatalog, toolchainChecksumCommand, type ToolchainBundle } from '../services/toolchains'
 
 const { locale } = useI18n()
 const copy = computed(() => locale.value === 'ko' ? {
@@ -64,14 +64,14 @@ onMounted(load)
           <a :href="`${bundle.url}.sha256`" download>{{ copy.checksum }}</a>
         </div>
         <details><summary>SHA-256</summary><code class="toolchain-hash">{{ bundle.sha256 }}</code></details>
+        <div class="toolchain-verification">
+          <h3>{{ copy.verify }}</h3><p>{{ copy.verifyBody }}</p>
+          <pre><code>{{ toolchainChecksumCommand(bundle) }}</code></pre>
+          <a :href="`https://github.com/llvm/llvm-project/blob/llvmorg-${bundle.llvm_version}/llvm/LICENSE.TXT`">{{ copy.license }}</a>
+        </div>
       </article>
     </div>
-    <section class="toolchain-verification">
-      <h2>{{ copy.verify }}</h2><p>{{ copy.verifyBody }}</p>
-      <pre><code>sha256sum --check wave-llvm-21.1.8-linux-riscv64-r1.tar.xz.sha256</code></pre>
-      <p>{{ copy.versioning }}</p>
-      <a href="https://github.com/llvm/llvm-project/blob/llvmorg-21.1.8/llvm/LICENSE.TXT">{{ copy.license }}</a>
-    </section>
+    <p class="toolchain-verification">{{ copy.versioning }}</p>
   </main>
 </template>
 
@@ -83,12 +83,13 @@ onMounted(load)
 .toolchains-scope { max-width: 72ch; line-height: 1.7; margin-block: 1.5rem 2rem; }
 .toolchains-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 1rem; }
 .toolchain-card, .toolchains-notice { border: 1px solid var(--ui-border, #81818155); border-radius: .65rem; padding: 1.5rem; }
+.toolchain-card { min-width: 0; }
 .toolchain-card h2 { font-size: 1.2rem; }
 .toolchain-date { font-size: .85rem; opacity: .7; }
 .toolchain-actions { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-block: 1.5rem; }
 .toolchain-hash { display: block; overflow-wrap: anywhere; padding-block: .75rem; font-size: .8rem; }
 .toolchain-verification { margin-top: 2.5rem; }
-.toolchain-verification h2 { font-size: 1.15rem; }
+.toolchain-verification h3 { font-size: 1rem; }
 .toolchain-verification pre { padding: 1rem; border: 1px solid var(--ui-border, #81818155); border-radius: .4rem; overflow-x: auto; }
 .toolchain-card summary { cursor: pointer; }
 </style>

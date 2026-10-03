@@ -39,3 +39,7 @@ export function parseToolchainCatalog(value: unknown): ToolchainBundle[] {
 export function formatToolchainSize(bytes: number): string {
   return `${(bytes / 1048576).toFixed(1)} MiB`
 }
+
+export function toolchainChecksumCommand(bundle: ToolchainBundle): string {
+  return `sha256sum --check ${bundle.filename}.sha256`
+}

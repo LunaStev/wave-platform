@@ -22,6 +22,7 @@ func TestRouterServesAPIAndSPA(t *testing.T) {
 	router := NewRouter(
 		"test",
 		frontend,
+		"",
 		"https://wave.example",
 		"0.1.0",
 		[]handler.ModuleStatus{{Name: "document", Enabled: true, Status: "foundation"}},
@@ -110,7 +111,7 @@ func TestRouterServesAPIAndSPA(t *testing.T) {
 }
 
 func TestRouterReportsUnavailableDatabase(t *testing.T) {
-	router := NewRouter("test", t.TempDir(), "https://wave.example", "0.1.0", nil, func() error {
+	router := NewRouter("test", t.TempDir(), "", "https://wave.example", "0.1.0", nil, func() error {
 		return errors.New("database unavailable")
 	}, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	request := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
