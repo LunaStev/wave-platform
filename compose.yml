@@ -77,6 +77,10 @@ services:
         source: ./Caddyfile
         target: /etc/caddy/Caddyfile
         read_only: true
+      - type: bind
+        source: ./data/toolchains
+        target: /srv/toolchains
+        read_only: true
       - caddy-data:/data
       - caddy-config:/config
     healthcheck:
@@ -98,13 +102,13 @@ services:
       - >-
         mkdir -p /app/data/badger /app/data/blobs/lunastev/images /app/data/git/mirrors
         /app/data/git/temporary /app/data/mail /app/data/mail/tls /app/data/search
-        /app/data/temporary /app/data/backups &&
+        /app/data/temporary /app/data/backups /app/data/toolchains &&
         chown -R "$${RUNTIME_UID}:$${RUNTIME_GID}" /app/data &&
         chmod 750 /app/data /app/data/badger /app/data/blobs /app/data/blobs/lunastev
         /app/data/blobs/lunastev/images /app/data/git
         /app/data/git/temporary /app/data/mail /app/data/mail/tls /app/data/search
         /app/data/temporary /app/data/backups &&
-        chmod 755 /app/data/git/mirrors
+        chmod 755 /app/data/git/mirrors /app/data/toolchains
     volumes:
       - type: bind
         source: ./data

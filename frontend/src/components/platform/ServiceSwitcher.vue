@@ -31,6 +31,7 @@ const exploreGroups = computed(() => [
 	{
 		key: 'nav.workspace',
 		items: [
+			{ to: '/toolchains', key: 'nav.toolchains', icon: GitFork },
 			{ to: '/mail', key: 'nav.mail', icon: Mail },
 			{ to: '/lunastev', key: 'nav.personal', icon: NotebookPen },
 		],

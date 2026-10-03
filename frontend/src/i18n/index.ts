@@ -11,6 +11,7 @@ const locale = ref<Locale>(initialLocale)
 
 const messages: Record<Locale, Record<string, string>> = {
   en: {
+    'nav.toolchains': 'Toolchains',
     'brand.subtitle': 'Platform',
     'nav.docs': 'Documentation',
 	'nav.blog': 'Blog',
@@ -747,6 +748,7 @@ const messages: Record<Locale, Record<string, string>> = {
     'register.title': 'Create a Wave account',
   },
   ko: {
+    'nav.toolchains': '툴체인',
     'brand.subtitle': '플랫폼',
     'nav.docs': '문서',
 	'nav.blog': '블로그',
