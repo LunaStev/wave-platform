@@ -76,9 +76,27 @@ verify_checksum() {
     local sums_file="$2"
     local file_name="$3"
     local expected
-    local actual
 
     expected="$(awk -v file="$file_name" '$2 == file || $2 == ("*" file) { print $1; exit }' "$sums_file")"
+    verify_hash "$archive" "$expected" "$file_name"
+}
+
+published_asset_digest() {
+    local repository="$1" version="$2" file_name="$3" response digest
+    command -v jq >/dev/null 2>&1 || fail "Archive verification requires jq. Install jq and retry."
+    response="$(curl -fsSL -H "Accept: application/vnd.github+json" \
+        "https://api.github.com/repos/${repository}/releases/tags/${version}")" \
+        || fail "Unable to query release ${repository} ${version}."
+    digest="$(jq -er --arg name "$file_name" '
+        [.assets[] | select(.name == $name and .state == "uploaded")] |
+        if length == 1 then .[0].digest else error("missing or duplicate asset") end |
+        strings | select(test("^sha256:[0-9A-Fa-f]{64}$"))
+    ' <<< "$response")" || fail "No valid GitHub SHA-256 was published for $file_name."
+    printf '%s' "${digest#sha256:}"
+}
+
+verify_hash() {
+    local archive="$1" expected="$2" file_name="$3" actual
     [[ "$expected" =~ ^[0-9A-Fa-f]{64}$ ]] || fail "No valid checksum was published for $file_name."
     actual="$(sha256_file "$archive")"
     expected="$(printf '%s' "$expected" | LC_ALL=C tr '[:upper:]' '[:lower:]')"
@@ -210,7 +228,7 @@ WAVE_FILE_NAME="wave-${WAVE_VERSION}-${WAVE_FILE_SUFFIX}.tar.gz"
 VEX_FILE_NAME="vex-${VEX_VERSION}-${VEX_FILE_SUFFIX}.tar.gz"
 WAVE_URL="https://github.com/${WAVE_REPO}/releases/download/${WAVE_VERSION}/${WAVE_FILE_NAME}"
 VEX_URL="https://github.com/${VEX_REPO}/releases/download/${VEX_VERSION}/${VEX_FILE_NAME}"
-WAVE_SUMS_URL="https://github.com/${WAVE_REPO}/releases/download/${WAVE_VERSION}/SHA256SUMS"
+WAVE_DIGEST="$(published_asset_digest "$WAVE_REPO" "$WAVE_VERSION" "$WAVE_FILE_NAME")"
 VEX_SUMS_URL="https://github.com/${VEX_REPO}/releases/download/${VEX_VERSION}/SHA256SUMS"
 INSTALL_PARENT="$(dirname "$INSTALL_DIR")"
 
@@ -231,11 +249,10 @@ echo "[info] Download: $WAVE_URL"
 curl -fL "$WAVE_URL" -o "$TMP_DIR/$WAVE_FILE_NAME"
 echo "[info] Download: $VEX_URL"
 curl -fL "$VEX_URL" -o "$TMP_DIR/$VEX_FILE_NAME"
-curl -fsSL "$WAVE_SUMS_URL" -o "$TMP_DIR/WAVE_SHA256SUMS"
 curl -fsSL "$VEX_SUMS_URL" -o "$TMP_DIR/VEX_SHA256SUMS"
 
 echo "[2/4] Verifying release archives..."
-verify_checksum "$TMP_DIR/$WAVE_FILE_NAME" "$TMP_DIR/WAVE_SHA256SUMS" "$WAVE_FILE_NAME"
+verify_hash "$TMP_DIR/$WAVE_FILE_NAME" "$WAVE_DIGEST" "$WAVE_FILE_NAME"
 verify_checksum "$TMP_DIR/$VEX_FILE_NAME" "$TMP_DIR/VEX_SHA256SUMS" "$VEX_FILE_NAME"
 
 echo "[3/4] Installing Wave toolchain..."
