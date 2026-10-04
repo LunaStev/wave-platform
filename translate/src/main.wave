@@ -1,0 +1,16 @@
+import("std::env::environ")::{EnvResult, env_exists, env_get_i32};
+import("./http/server")::{serve};
+import("./translation/backend")::{backend_status};
+
+fun main() -> i32 {
+    var port: i32 = 8091;
+    if (env_exists("WAVE_TRANSLATE_PORT")) {
+        var configured: EnvResult<i32> = env_get_i32("WAVE_TRANSLATE_PORT");
+        if (!configured.ok || configured.value < 1 || configured.value > 65535) {
+            println("WAVE_TRANSLATE_PORT must be an integer from 1 to 65535");
+            return 2;
+        }
+        port = configured.value;
+    }
+    return serve(port as u16, backend_status());
+}

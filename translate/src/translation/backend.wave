@@ -1,0 +1,5 @@
+// The inference engine plugs in here. No model is configured in the foundation.
+// Readiness must not claim that untranslated input is a successful translation.
+pub fun backend_status() -> str {
+    return "{\"ready\":false,\"reason\":\"model_not_configured\"}\n";
+}

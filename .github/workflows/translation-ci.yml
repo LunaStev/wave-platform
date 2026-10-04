@@ -1,0 +1,29 @@
+name: Wave Translation Tooling
+
+on:
+  pull_request:
+    paths:
+      - 'translate/**'
+      - '.github/workflows/translation-ci.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'translate/**'
+      - '.github/workflows/translation-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  offline-tooling:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test snapshot retention and build isolation
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 translate/tests/test_tooling.py
