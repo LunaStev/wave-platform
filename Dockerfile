@@ -39,10 +39,44 @@ RUN apt-get update \
 ARG WAVE_VERSION=0.2.0-pre-beta
 ARG VEX_VERSION=0.0.1
 
-COPY frontend/public/install.sh /tmp/install-wave.sh
-
-RUN bash /tmp/install-wave.sh --version "${WAVE_VERSION}" --vex-version "${VEX_VERSION}" \
-    && rm -f /tmp/install-wave.sh
+# The server keeps a pinned toolchain. Public installers only install latest,
+# so provision these explicit historical versions from release archives directly.
+RUN <<'INSTALL'
+set -eu
+case "$(uname -m)" in
+    x86_64) arch=x86_64 ;;
+    aarch64) arch=aarch64 ;;
+    *) echo 'Unsupported server toolchain architecture' >&2; exit 1 ;;
+esac
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+mkdir -p /root/.wave/bin/share/vex
+for product in Wave Vex; do
+    if [ "$product" = Wave ]; then
+        tag="v${WAVE_VERSION#v}"; name="wave-$tag-$arch-linux-gnu.tar.gz"
+    else
+        tag="v${VEX_VERSION#v}"; name="vex-$tag-$arch-unknown-linux-gnu.tar.gz"
+    fi
+    curl --proto '=https' --tlsv1.2 -fsSL --retry 3 \
+        "https://api.github.com/repos/wavefnd/$product/releases/tags/$tag" > "$work/release.json"
+    digest="$(jq -er --arg name "$name" \
+        '[.assets[] | select(.name == $name and .state == "uploaded")] | if length == 1 then .[0].digest else error("missing asset") end | strings | select(test("^sha256:[0-9a-fA-F]{64}$")) | sub("^sha256:"; "")' "$work/release.json")"
+    curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL --retry 3 \
+        "https://github.com/wavefnd/$product/releases/download/$tag/$name" -o "$work/$name"
+    printf '%s  %s\n' "$digest" "$work/$name" | sha256sum -c -
+    tar -xzf "$work/$name" -C "$work"
+    package="$work/${name%.tar.gz}"
+    if [ "$product" = Wave ]; then
+        test -f "$package/wavec"; test -d "$package/llvm"
+        cp -R "$package"/. /root/.wave/bin/
+    else
+        cp "$package/vex" /root/.wave/bin/vex
+        for notice in COPYRIGHT LICENSE NOTICE README.md; do
+            if [ -f "$package/$notice" ]; then cp "$package/$notice" /root/.wave/bin/share/vex/; fi
+        done
+    fi
+done
+INSTALL
 
 ENV PATH="/root/.wave/bin:${PATH}"
 
