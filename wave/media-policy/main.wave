@@ -23,8 +23,8 @@ export(c, "wave_media_policy_plan") fun media_policy_plan(
         return -4;
     }
 
-    let mut planned_width: i64 = width;
-    let mut planned_height: i64 = height;
+    var planned_width: i64 = width;
+    var planned_height: i64 = height;
     if (planned_width > 1920) {
         planned_height = (planned_height * 1920) / planned_width;
         planned_width = 1920;
