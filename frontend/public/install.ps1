@@ -1,313 +1,229 @@
-param(
-    [string]$Version = "",
-    [string]$VexVersion = "",
-    [switch]$Latest
+﻿param(
+    [switch]$Latest,
+    [switch]$WithVex,
+    [switch]$WithoutVex,
+    [switch]$NoModifyPath,
+    [Alias('WaveVersion')][string]$Version,
+    [string]$VexVersion,
+    [switch]$Help,
+    [Parameter(ValueFromRemainingArguments = $true)][string[]]$Remaining
 )
+# Wave installer channel policy: latest-only-v1
+$ErrorActionPreference = 'Stop'
 
-# Wave installer channel policy: versioned-only-v1
-$ErrorActionPreference = "Stop"
-
-$WaveRepo = "wavefnd/Wave"
-$VexRepo = "wavefnd/Vex"
-
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-
-function Write-Info($Message) {
-    Write-Host "[info] $Message"
+function Write-Info($Message) { Write-Host "[info] $Message" }
+function Manual-Only {
+    throw 'This installer only installs the latest public release. Install older versions or Nightly manually: https://github.com/wavefnd/Wave/releases'
 }
-
-function Write-Step($Message) {
-    Write-Host $Message
-}
-
-function Fail($Message) {
-    Write-Error "[error] $Message"
-    exit 1
-}
-
-function Reject-Nightly($Value) {
-    if ($Value -match '^v?nightly$') {
-        Fail "Nightly requires manual download: https://github.com/wavefnd/Wave/releases/tag/nightly"
-    }
-}
-
-function Normalize-Version($Value) {
-    Reject-Nightly $Value
-    if ([string]::IsNullOrWhiteSpace($Value)) {
-        return ""
-    }
-    if ($Value.StartsWith("v")) {
-        return $Value
-    }
-    return "v$Value"
-}
-
-function Assert-Version($Value) {
-    Reject-Nightly $Value
-    if ($Value -notmatch '^v[0-9A-Za-z][0-9A-Za-z._+-]*$') {
-        Fail "Invalid version tag: $Value"
-    }
-}
-
-function Resolve-LatestVersion($Repository) {
-    $page = 1
-    while ($true) {
-        $response = Invoke-RestMethod -Headers @{ Accept = "application/vnd.github+json" } -Uri "https://api.github.com/repos/$Repository/releases?per_page=100&page=$page"
-        $releases = @($response)
-        foreach ($release in $releases) {
-            if ($null -eq $release -or $release.draft -or $release.tag_name -match '^v?nightly$') {
-                continue
-            }
-            Assert-Version $release.tag_name
-            return $release.tag_name
-        }
-        if ($releases.Count -eq 0) {
-            Fail "No versioned release is available for $Repository."
-        }
-        $page++
-    }
-}
-
-function Get-PublishedHash($SumsPath, $FileName) {
-    foreach ($line in Get-Content -LiteralPath $SumsPath) {
-        if ($line -match '^(?<hash>[0-9A-Fa-f]{64})\s+\*?(?<name>.+)$') {
-            if ($Matches['name'].Trim() -eq $FileName) {
-                return $Matches['hash'].ToLowerInvariant()
+function Get-LatestRelease($Repository) {
+    $best = $null
+    for ($page = 1; ; $page++) {
+        $result = Invoke-RestMethod -Headers @{Accept='application/vnd.github+json'} -TimeoutSec 60 `
+            -Uri "https://api.github.com/repos/$Repository/releases?per_page=100&page=$page"
+        $response = @($result)
+        foreach ($release in $response) {
+            if ($null -eq $release -or $release.draft -ne $false -or -not $release.published_at -or
+                $release.tag_name -cnotmatch '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$') { continue }
+            if ($null -eq $best -or [DateTimeOffset]$release.published_at -gt [DateTimeOffset]$best.published_at -or
+                ([DateTimeOffset]$release.published_at -eq [DateTimeOffset]$best.published_at -and $release.id -gt $best.id)) {
+                $best = $release
             }
         }
+        if ($response.Count -lt 100) { break }
     }
-    return ""
+    if ($null -eq $best) { throw "No public versioned release is available for $Repository." }
+    return $best
 }
-
-function Assert-Checksum($ArchivePath, $SumsPath, $FileName) {
-    $expected = Get-PublishedHash $SumsPath $FileName
-    Assert-Hash $ArchivePath $expected $FileName
-}
-
-function Get-WaveReleaseAsset($ReleaseVersion, $FileNames) {
-    $release = Invoke-RestMethod -Headers @{ Accept = "application/vnd.github+json" } -Uri "https://api.github.com/repos/$WaveRepo/releases/tags/$ReleaseVersion"
-    foreach ($name in $FileNames) {
-        $assets = @($release.assets | Where-Object { $_.name -ceq $name })
-        if ($assets.Count -eq 0) { continue }
-        if ($assets.Count -ne 1 -or $assets[0].state -ne 'uploaded' -or
-            $assets[0].digest -cnotmatch '^sha256:[0-9A-Fa-f]{64}$') {
-            Fail "No valid GitHub SHA-256 was published for $name."
-        }
-        return $assets[0]
+function Get-ReleaseAsset($Release, $Name, [bool]$Optional = $false) {
+    $assets = @($Release.assets | Where-Object { $_.name -ceq $Name })
+    if ($assets.Count -eq 0 -and $Optional) { return $null }
+    if ($assets.Count -ne 1) { throw "Latest release has no unique package: $Name. No older version will be selected." }
+    $asset = $assets[0]
+    if ($asset.state -ne 'uploaded' -or $asset.digest -cnotmatch '^sha256:[0-9A-Fa-f]{64}$') {
+        throw "No valid GitHub SHA-256 was published for $Name."
     }
-    Fail "No Windows x86_64 archive was published for $ReleaseVersion."
+    return $asset
 }
-
-function Assert-Hash($ArchivePath, $expected, $FileName) {
-    if ($expected -notmatch '^[0-9A-Fa-f]{64}$') {
-        Fail "No valid checksum was published for $FileName."
-    }
-    $actual = (Get-FileHash -LiteralPath $ArchivePath -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($actual -ne $expected.ToLowerInvariant()) {
-        Fail "Checksum verification failed for $FileName."
-    }
-    Write-Info "Verified SHA-256: $FileName"
+function Assert-Hash($Path, $Expected) {
+    if ($Expected -notmatch '^[0-9A-Fa-f]{64}$') { throw "Invalid SHA-256 for $Path." }
+    $actual = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
+    if ($actual -ine $Expected) { throw "SHA-256 verification failed: $Path" }
 }
-
-function Add-UserPath($Directory) {
-    $fullPath = [System.IO.Path]::GetFullPath($Directory)
-    $current = [Environment]::GetEnvironmentVariable("Path", "User")
-
-    if ([string]::IsNullOrWhiteSpace($current)) {
-        $next = $fullPath
-    } else {
-        $parts = $current -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-        if ($parts -contains $fullPath) {
+function Get-WindowsTarget($Architecture) {
+    switch ($Architecture.ToLowerInvariant()) {
+        { $_ -in @('x64','amd64','x86_64') } { return 'x86_64-pc-windows-msvc' }
+        { $_ -in @('arm64','aarch64') } { return 'aarch64-pc-windows-msvc' }
+        default { throw "Unsupported Windows architecture: $Architecture" }
+    }
+}
+function Get-NativeWindowsTarget {
+    if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { throw 'Use install.sh on Linux, macOS or FreeBSD.' }
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    try { $architecture = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() }
+    catch { $architecture = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE } }
+    return Get-WindowsTarget $architecture
+}
+function Save-Download($Uri, $Path) {
+    if (-not $Uri.StartsWith('https://github.com/')) { throw 'Expected a GitHub HTTPS download.' }
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        try {
+            Invoke-WebRequest -UseBasicParsing -Uri $Uri -OutFile $Path -TimeoutSec 600
             return
-        }
-        $next = ($parts + $fullPath) -join ';'
-    }
-
-    [Environment]::SetEnvironmentVariable("Path", $next, "User")
-    Write-Info "Added $fullPath to user PATH"
-}
-
-function Restore-Installation($InstallDirectory, $BackupDirectory) {
-    if (Test-Path -LiteralPath $InstallDirectory) {
-        Remove-Item -Recurse -Force -LiteralPath $InstallDirectory -ErrorAction SilentlyContinue
-    }
-    if (Test-Path -LiteralPath $BackupDirectory) {
-        Move-Item -LiteralPath $BackupDirectory -Destination $InstallDirectory
-    }
-}
-
-Write-Info "Detecting system..."
-
-if ([System.Environment]::OSVersion.Platform -ne [System.PlatformID]::Win32NT) {
-    Fail "install.ps1 is for Windows. Use install.sh on Linux/macOS."
-}
-
-$arch = $env:PROCESSOR_ARCHITECTURE
-if (-not [Environment]::Is64BitOperatingSystem -or ($arch -ne "AMD64" -and $arch -ne "x86_64")) {
-    Fail "Windows installer currently supports x86_64 only."
-}
-
-if ($Latest) {
-    $Version = Resolve-LatestVersion $WaveRepo
-    $VexVersion = Resolve-LatestVersion $VexRepo
-    Write-Info "Latest Wave version: $Version"
-    Write-Info "Latest Vex version: $VexVersion"
-} else {
-    $Version = Normalize-Version $Version
-    $VexVersion = Normalize-Version $VexVersion
-}
-
-if ([string]::IsNullOrWhiteSpace($Version)) {
-    Write-Host "Wave Toolchain Installer"
-    Write-Host "Usage:"
-    Write-Host "  powershell -ExecutionPolicy Bypass -File install.ps1 -Version <wave-tag> [-VexVersion <vex-tag>]"
-    Write-Host "  powershell -ExecutionPolicy Bypass -File install.ps1 -Latest"
-    Fail "Missing Wave version. Use -Version <tag> or -Latest."
-}
-Assert-Version $Version
-
-if ([string]::IsNullOrWhiteSpace($VexVersion)) {
-    $VexVersion = Resolve-LatestVersion $VexRepo
-    Write-Info "Latest Vex version: $VexVersion"
-}
-Assert-Version $VexVersion
-
-# Prefer the supported MSVC package; retain older versioned GNU downloads.
-$waveAsset = Get-WaveReleaseAsset $Version @(
-    "wave-$Version-x86_64-pc-windows-msvc.zip",
-    "wave-$Version-x86_64-pc-windows-gnu.zip"
-)
-$vexFileSuffix = "x86_64-pc-windows-msvc"
-$waveFileName = $waveAsset.name
-$waveDigest = $waveAsset.digest.Substring(7)
-$vexFileName = "vex-$VexVersion-$vexFileSuffix.zip"
-$waveUrl = "https://github.com/$WaveRepo/releases/download/$Version/$waveFileName"
-$vexUrl = "https://github.com/$VexRepo/releases/download/$VexVersion/$vexFileName"
-$vexSumsUrl = "https://github.com/$VexRepo/releases/download/$VexVersion/SHA256SUMS"
-
-if ($env:WAVE_INSTALL_DIR) {
-    $installDir = [System.IO.Path]::GetFullPath($env:WAVE_INSTALL_DIR)
-} else {
-    $installDir = Join-Path $env:LOCALAPPDATA "Wave\bin"
-}
-
-$installParent = Split-Path -Parent $installDir
-New-Item -ItemType Directory -Force -Path $installParent | Out-Null
-
-$tempRoot = Join-Path $installParent (".wave-install-" + [System.Guid]::NewGuid().ToString("N"))
-$stageDir = "$installDir.new.$PID"
-$backupDir = "$installDir.old.$PID"
-$waveDownloadPath = Join-Path $tempRoot $waveFileName
-$vexDownloadPath = Join-Path $tempRoot $vexFileName
-$vexSumsPath = Join-Path $tempRoot "VEX_SHA256SUMS"
-$waveExtractRoot = Join-Path $tempRoot "wave"
-$vexExtractRoot = Join-Path $tempRoot "vex"
-
-New-Item -ItemType Directory -Force -Path $tempRoot | Out-Null
-
-try {
-    Write-Step "[1/4] Downloading Wave $Version and Vex $VexVersion..."
-    Write-Info "Download: $waveUrl"
-    Invoke-WebRequest -UseBasicParsing -Uri $waveUrl -OutFile $waveDownloadPath
-    Write-Info "Download: $vexUrl"
-    Invoke-WebRequest -UseBasicParsing -Uri $vexUrl -OutFile $vexDownloadPath
-    Invoke-WebRequest -UseBasicParsing -Uri $vexSumsUrl -OutFile $vexSumsPath
-
-    Write-Step "[2/4] Verifying release archives..."
-    Assert-Hash $waveDownloadPath $waveDigest $waveFileName
-    Assert-Checksum $vexDownloadPath $vexSumsPath $vexFileName
-
-    Write-Step "[3/4] Installing Wave toolchain..."
-    New-Item -ItemType Directory -Force -Path $waveExtractRoot | Out-Null
-    New-Item -ItemType Directory -Force -Path $vexExtractRoot | Out-Null
-    Expand-Archive -Force -Path $waveDownloadPath -DestinationPath $waveExtractRoot
-    Expand-Archive -Force -Path $vexDownloadPath -DestinationPath $vexExtractRoot
-
-    $wavePackageDir = Join-Path $waveExtractRoot ([System.IO.Path]::GetFileNameWithoutExtension($waveFileName))
-    $vexPackageDir = Join-Path $vexExtractRoot ("vex-$VexVersion-$vexFileSuffix")
-
-    if (-not (Test-Path -LiteralPath $wavePackageDir -PathType Container)) {
-        Fail "Invalid Wave package layout."
-    }
-    if (-not (Test-Path -LiteralPath $vexPackageDir -PathType Container)) {
-        Fail "Invalid Vex package layout."
-    }
-
-    $wavec = Join-Path $wavePackageDir "wavec.exe"
-    $llvm = Join-Path $wavePackageDir "llvm"
-    $vex = Join-Path $vexPackageDir "vex.exe"
-    if (-not (Test-Path -LiteralPath $wavec -PathType Leaf)) {
-        Fail "Wave package does not contain wavec.exe."
-    }
-    if (-not (Test-Path -LiteralPath $llvm -PathType Container)) {
-        Fail "Wave package does not contain bundled llvm/."
-    }
-    if (-not (Test-Path -LiteralPath $vex -PathType Leaf)) {
-        Fail "Vex package does not contain vex.exe."
-    }
-
-    Remove-Item -Recurse -Force -LiteralPath $stageDir -ErrorAction SilentlyContinue
-    Remove-Item -Recurse -Force -LiteralPath $backupDir -ErrorAction SilentlyContinue
-    New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
-
-    Copy-Item -Force -Path (Join-Path $wavePackageDir "*") -Destination $stageDir -Recurse
-    Copy-Item -Force -LiteralPath $vex -Destination (Join-Path $stageDir "vex.exe")
-
-    $vexNoticeDir = Join-Path $stageDir "share\vex"
-    New-Item -ItemType Directory -Force -Path $vexNoticeDir | Out-Null
-    foreach ($notice in @("COPYRIGHT", "LICENSE", "NOTICE", "README.md")) {
-        $noticePath = Join-Path $vexPackageDir $notice
-        if (Test-Path -LiteralPath $noticePath -PathType Leaf) {
-            Copy-Item -Force -LiteralPath $noticePath -Destination (Join-Path $vexNoticeDir $notice)
+        } catch {
+            if ($attempt -eq 3) { throw }
+            Start-Sleep -Seconds 2
         }
     }
-
+}
+function Add-UserPath($Directory) {
+    $current = [Environment]::GetEnvironmentVariable('Path', 'User')
+    $parts = @($current -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if (-not @($parts | Where-Object { $_.TrimEnd('\') -ieq $Directory.TrimEnd('\') }).Count) {
+        [Environment]::SetEnvironmentVariable('Path', (($parts + $Directory) -join ';'), 'User')
+    }
+    Write-Info 'User PATH configured. Open a new terminal to use Wave.'
+}
+function Test-Installation($Directory, $Target, [bool]$InstallVex, $Work) {
+    $wavec = Join-Path $Directory 'wavec.exe'
+    & $wavec --version
+    if ($LASTEXITCODE -ne 0) { throw 'wavec --version failed. Check the Visual C++ runtime.' }
+    $actual = & $wavec print host-target
+    if ($LASTEXITCODE -ne 0 -or "$actual".Trim() -ne $Target) { throw "Compiler host target differs from $Target." }
+    $source = Join-Path $Work 'install-smoke.wave'
+    [IO.File]::WriteAllText($source, @'
+import("std::mem::layout")::{size_of};
+fun main() -> i32 {
+    if (size_of<i64>() != 8) { return 1; }
+    return 0;
+}
+'@)
+    Push-Location $Work
+    try {
+        & $wavec run $source --std-root (Join-Path $Directory 'std')
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Bundled std compile/run check failed. Ensure the Windows SDK and MSVC/UCRT libraries are installed and available (for example, in a Visual Studio developer shell).'
+        }
+    } finally { Pop-Location }
+    if ($InstallVex) {
+        & (Join-Path $Directory 'vex.exe') --version
+        if ($LASTEXITCODE -ne 0) { throw 'vex --version failed.' }
+    }
+}
+function Install-Wave {
+    if ($Help) {
+        Write-Host @'
+Wave Toolchain Installer — latest public release only
+Usage: .\install.ps1 [-Latest] [-WithVex | -WithoutVex] [-NoModifyPath]
+Default: install Wave and install Vex when its latest release supports this platform.
+-WithVex requires Vex; -WithoutVex installs Wave only.
+WAVE_INSTALL_DIR overrides the dedicated installation directory (%LOCALAPPDATA%\Wave\bin).
+Older versions and Nightly: download manually from https://github.com/wavefnd/Wave/releases
+'@
+        return
+    }
+    if ($Version -or $VexVersion -or $env:WAVE_VERSION -or $env:VEX_VERSION) { Manual-Only }
+    if ($Remaining.Count) {
+        if (@($Remaining | Where-Object { $_ -match '(?i)nightly|version|^v?\d' }).Count) { Manual-Only }
+        throw "Unknown argument: $($Remaining -join ' '). Use -Help."
+    }
+    if ($WithVex -and $WithoutVex) { throw 'Conflicting Vex options.' }
+    $target = Get-NativeWindowsTarget
+    $installDir = if ($env:WAVE_INSTALL_DIR) { [IO.Path]::GetFullPath($env:WAVE_INSTALL_DIR) } else { Join-Path $env:LOCALAPPDATA 'Wave\bin' }
+    if ($installDir -match '[;\r\n]') { throw 'Use an installation directory without semicolons or newlines.' }
+    if ($installDir.TrimEnd('\') -eq [IO.Path]::GetPathRoot($installDir).TrimEnd('\') -or
+        $installDir.TrimEnd('\') -ieq $HOME.TrimEnd('\')) { throw 'Use a dedicated installation directory.' }
     if (Test-Path -LiteralPath $installDir) {
-        Move-Item -LiteralPath $installDir -Destination $backupDir
+        if ((Get-Item -LiteralPath $installDir).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'The installation directory must not be a link or junction.' }
+        if (-not (Test-Path -LiteralPath (Join-Path $installDir 'wavec.exe') -PathType Leaf)) {
+            throw "Refusing to replace a directory not managed by Wave: $installDir"
+        }
     }
-
+    $wave = Get-LatestRelease 'wavefnd/Wave'
+    $waveName = "wave-$($wave.tag_name)-$target.zip"
+    $waveAsset = Get-ReleaseAsset $wave $waveName
+    $vex = $null; $vexAsset = $null; $vexName = ''
+    if (-not $WithoutVex) {
+        $vex = Get-LatestRelease 'wavefnd/Vex'
+        $vexName = "vex-$($vex.tag_name)-$target.zip"
+        $vexAsset = Get-ReleaseAsset $vex $vexName $true
+        if ($null -eq $vexAsset) {
+            if ($WithVex) { throw "Latest Vex has no package for $target." }
+            Write-Info "Latest Vex has no package for $target; installing Wave only."
+        }
+    }
+    Write-Info "Wave $($wave.tag_name) / $target"
+    Write-Info "Install directory: $installDir"
+    $parent = Split-Path -Parent $installDir
+    New-Item -ItemType Directory -Force -Path $parent | Out-Null
+    $lockPath = "$installDir.install-lock"
+    # CreateNew prevents simultaneous installers from moving the same installation.
+    $lock = [IO.File]::Open($lockPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+    $temp = Join-Path $parent ('.wave-install-' + [Guid]::NewGuid().ToString('N'))
+    $stage = Join-Path $temp 'stage'; $backup = Join-Path $temp 'previous'
+    $activated = $false; $committed = $false; $keepBackup = $false
     try {
-        Move-Item -LiteralPath $stageDir -Destination $installDir
-    } catch {
-        if ((Test-Path -LiteralPath $backupDir) -and -not (Test-Path -LiteralPath $installDir)) {
-            Move-Item -LiteralPath $backupDir -Destination $installDir
+        New-Item -ItemType Directory -Path $temp | Out-Null
+        Write-Info '[1/4] Downloading and verifying packages'
+        $waveZip = Join-Path $temp 'wave.zip'
+        Save-Download "https://github.com/wavefnd/Wave/releases/download/$($wave.tag_name)/$waveName" $waveZip
+        Assert-Hash $waveZip $waveAsset.digest.Substring(7)
+        if ($vexAsset) {
+            $vexZip = Join-Path $temp 'vex.zip'
+            Save-Download "https://github.com/wavefnd/Vex/releases/download/$($vex.tag_name)/$vexName" $vexZip
+            Assert-Hash $vexZip $vexAsset.digest.Substring(7)
         }
-        throw
+        Write-Info '[2/4] Preparing installation'
+        $waveRoot = Join-Path $temp 'wave'
+        Expand-Archive -LiteralPath $waveZip -DestinationPath $waveRoot
+        $package = Join-Path $waveRoot ([IO.Path]::GetFileNameWithoutExtension($waveName))
+        foreach ($path in @('wavec.exe','llvm\bin','std\manifest.json')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $package $path))) { throw "Wave package is missing $path." }
+        }
+        New-Item -ItemType Directory -Path $stage | Out-Null
+        Get-ChildItem -LiteralPath $package -Force | Copy-Item -Destination $stage -Recurse -Force
+        if ($vexAsset) {
+            $vexRoot = Join-Path $temp 'vex'
+            Expand-Archive -LiteralPath $vexZip -DestinationPath $vexRoot
+            $package = Join-Path $vexRoot ([IO.Path]::GetFileNameWithoutExtension($vexName))
+            Copy-Item -LiteralPath (Join-Path $package 'vex.exe') -Destination $stage
+            $notices = Join-Path $stage 'share\vex'
+            New-Item -ItemType Directory -Force -Path $notices | Out-Null
+            foreach ($name in @('COPYRIGHT','LICENSE','NOTICE','README.md')) {
+                $path = Join-Path $package $name
+                if (Test-Path -LiteralPath $path) { Copy-Item -LiteralPath $path -Destination $notices }
+            }
+        }
+        Write-Info '[3/4] Activating installation'
+        if (Test-Path -LiteralPath $installDir) { Move-Item -LiteralPath $installDir -Destination $backup }
+        Move-Item -LiteralPath $stage -Destination $installDir
+        $activated = $true
+        Write-Info '[4/4] Checking compiler, bundled std and runtime'
+        Test-Installation $installDir $target ($null -ne $vexAsset) $temp
+        $committed = $true
+        if (-not $NoModifyPath) {
+            try { Add-UserPath $installDir }
+            catch { Write-Warning "Wave is installed, but PATH could not be configured. Add $installDir to PATH manually." }
+        }
+        Write-Info "Installed Wave $($wave.tag_name)."
+        if ($vexAsset) { Write-Info "Installed Vex $($vex.tag_name)." }
+    } finally {
+        try {
+            if (-not $committed) {
+                if ($activated) { Remove-Item -LiteralPath $installDir -Recurse -Force }
+                if (Test-Path -LiteralPath $backup) {
+                    try { Move-Item -LiteralPath $backup -Destination $installDir }
+                    catch { $keepBackup = $true; throw "Restore failed. Previous installation retained at $backup. $($_.Exception.Message)" }
+                }
+            }
+            if (-not $keepBackup -and (Test-Path -LiteralPath $temp)) { Remove-Item -LiteralPath $temp -Recurse -Force }
+        } finally {
+            $lock.Dispose()
+            Remove-Item -LiteralPath $lockPath -Force
+        }
     }
-
-    Write-Step "[4/4] Verifying installation..."
-    $installedWavec = Join-Path $installDir "wavec.exe"
-    $installedVex = Join-Path $installDir "vex.exe"
-
-    try {
-        if (-not (Test-Path -LiteralPath $installedWavec -PathType Leaf)) {
-            throw "wavec.exe was not found in $installDir."
-        }
-        if (-not (Test-Path -LiteralPath $installedVex -PathType Leaf)) {
-            throw "vex.exe was not found in $installDir."
-        }
-
-        & $installedWavec --version
-        if ($LASTEXITCODE -ne 0) {
-            throw "wavec --version exited with code $LASTEXITCODE"
-        }
-        & $installedVex --version
-        if ($LASTEXITCODE -ne 0) {
-            throw "vex --version exited with code $LASTEXITCODE"
-        }
-    } catch {
-        Restore-Installation $installDir $backupDir
-        throw
-    }
-
-    Remove-Item -Recurse -Force -LiteralPath $backupDir -ErrorAction SilentlyContinue
-    Add-UserPath $installDir
-    $env:Path = "$installDir;$env:Path"
-
-    Write-Host "Installation completed successfully."
-    Write-Info "Installed wavec $Version and vex $VexVersion."
-    Write-Host "Restart PowerShell if 'wavec' or 'vex' is not available from PATH."
-} finally {
-    Remove-Item -Recurse -Force -LiteralPath $tempRoot -ErrorAction SilentlyContinue
-    Remove-Item -Recurse -Force -LiteralPath $stageDir -ErrorAction SilentlyContinue
+}
+# Dot-sourcing exposes helpers without installing anything.
+if ($MyInvocation.InvocationName -ne '.') {
+    try { Install-Wave }
+    catch { Write-Error $_; exit 1 }
 }

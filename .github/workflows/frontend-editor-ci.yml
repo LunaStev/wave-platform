@@ -34,6 +34,20 @@ jobs:
       - name: Test server transfer with toolchain downloads
         run: python3 tools/test-server-transfer.py
 
+  windows-installer:
+    name: Installer / ${{ matrix.runner }} / Windows PowerShell
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [windows-2025, windows-11-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test latest-only installer and recovery
+        shell: powershell
+        run: ./frontend/tests/install_latest_test.ps1
+
   build-and-test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -51,19 +65,20 @@ jobs:
             editor/package-lock.json
             frontend/package-lock.json
 
-      - name: Check versioned-only shell installer
+      - name: Check latest-only shell installer
         run: |
           bash frontend/tests/install_checksum_test.sh
-          bash frontend/tests/install_nightly_test.sh
+          bash frontend/tests/install_latest_test.sh
+          python3 frontend/tests/install_latest_test.py
 
-      - name: Check versioned-only PowerShell installer
+      - name: Check latest-only PowerShell installer
         shell: pwsh
-        run: ./frontend/tests/install_nightly_test.ps1
+        run: ./frontend/tests/install_latest_test.ps1
 
       - name: Build frontend Docker stage
         run: docker build --target frontend-builder --progress=plain .
 
-      - name: Verify Wave and Vex installation in Docker
+      - name: Verify pinned server toolchain in Docker
         run: docker build --target wave-toolchain --progress=plain .
 
       - name: Install editor dependencies

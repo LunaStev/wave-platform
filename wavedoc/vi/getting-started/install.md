@@ -9,39 +9,57 @@ title: Cài đặt Wave
 summary: Cài đặt Wave trên Linux, macOS hoặc Windows và chạy chương trình đầu tiên.
 ---
 
-## Linux và macOS
+## Chính sách cài đặt
 
-Chạy lệnh sau trong cửa sổ dòng lệnh. Lệnh này cài đặt Wave cùng trình quản lý gói Vex.
+Trình cài đặt chỉ cài bản phát hành công khai mới nhất có số phiên bản, kể cả bản phát hành trước có số phiên bản. Không chọn Draft hoặc Nightly. Với bản cũ và Nightly, hãy cài thủ công theo hướng dẫn bên dưới. Nếu bản mới nhất không có gói cho nền tảng của bạn, quá trình sẽ dừng thay vì chọn bản cũ.
+
+| Hệ điều hành | Kiến trúc |
+| --- | --- |
+| Linux | amd64, arm64, riscv64, loong64 |
+| macOS | amd64, arm64 |
+| Windows | amd64, arm64 |
+| FreeBSD | amd64 |
+
+## Linux, macOS và FreeBSD
+
+Cần Bash, curl, jq, tar và công cụ SHA-256. Trên FreeBSD, hãy cài bash, curl và jq trước. Linux cần glibc và thư viện hệ thống tương thích; macOS cần Apple Command Line Tools; FreeBSD cần hệ thống cơ sở tương thích.
 
 ```shell
-curl -fsSL https://wave-lang.dev/install.sh | bash -s -- latest
-```
-
-Sau khi cài đặt xong, mở cửa sổ dòng lệnh mới và kiểm tra phiên bản.
-
-```shell
-wavec --version
+curl -fsSL https://wave-lang.dev/install.sh | bash
 ```
 
 ## Windows
 
-Chạy các lệnh sau trong PowerShell. Các lệnh này cài đặt Wave cùng trình quản lý gói Vex.
+Chạy trong PowerShell. Trình cài đặt nhận diện amd64 hoặc arm64 và chọn gói MSVC. Cần Visual C++ runtime, Windows SDK và thư viện MSVC/UCRT. Shell dành cho nhà phát triển Visual Studio có thể cung cấp môi trường kiểm tra biên dịch.
 
 ```powershell
 irm https://wave-lang.dev/install.ps1 -OutFile install.ps1
-powershell -ExecutionPolicy Bypass -File .\install.ps1 -Latest
+powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-Sau khi cài đặt xong, mở cửa sổ PowerShell mới và kiểm tra phiên bản.
+## Tùy chọn cài đặt
 
-```powershell
+Mặc định cài Wave và Vex mới nhất nếu có gói Vex cho nền tảng. Nếu không có, chỉ cài Wave và thông báo rõ. Lỗi tải xuống hoặc xác minh Vex được báo lỗi, không bị bỏ qua âm thầm.
+
+| | Tùy chọn Bash | Tùy chọn PowerShell |
+| --- | --- | --- |
+| Yêu cầu Vex | `--with-vex` | `-WithVex` |
+| Chỉ cài Wave | `--without-vex` | `-WithoutVex` |
+| Không sửa PATH | `--no-modify-path` | `-NoModifyPath` |
+
+Chạy lại cùng lệnh để cập nhật. Giữ bản cài cũ cho đến khi trình biên dịch mới và std đi kèm vượt qua kiểm tra thực thi; khôi phục khi thất bại. Thư mục mặc định là ~/.wave/bin trên Unix và %LOCALAPPDATA%\Wave\bin trên Windows. Dùng WAVE_INSTALL_DIR để chọn thư mục cài riêng. Mở terminal mới sau khi cấu hình PATH.
+
+## Cài thủ công bản cũ và Nightly
+
+Tải .tar.gz hoặc .zip đúng phiên bản, hệ điều hành và kiến trúc từ [GitHub Releases](https://github.com/wavefnd/Wave/releases). Giải nén và giữ đường dẫn tương đối của wavec, std, llvm cùng các tệp đi kèm. Thêm thư mục chứa wavec vào PATH. Với bản cũ, làm theo ghi chú về cấu trúc và yêu cầu của bản đó. Không hỗ trợ --version, --vex-version, -Version và -VexVersion.
+
+## Chạy lần đầu
+
+Trình cài đặt biên dịch và chạy một chương trình nhỏ dùng std đi kèm. Không cần tải std mới nhất riêng. Sau khi cài, chạy ví dụ bên dưới. Nếu có Vex, cũng có thể kiểm tra bằng vex --version.
+
+```shell
 wavec --version
-vex --version
 ```
-
-## Chạy chương trình đầu tiên
-
-Lưu đoạn mã sau vào tệp `main.wave`.
 
 <!-- wave-example: install-stdlib -->
 ```wave
@@ -54,23 +72,10 @@ fun main() {
 }
 ```
 
-Chạy chương trình từ thư mục chứa tệp vừa lưu.
-
 ```shell
 wavec run main.wave
 ```
-
-Kết quả:
 
 ```text
 Wave: 4 bytes
 ```
-
-Nếu xuất hiện thông báo không tìm thấy thư viện chuẩn, hãy cài đặt thư viện rồi chạy lại chương trình.
-
-```shell
-wavec install std
-wavec run main.wave
-```
-
-[Tiếp theo: Chương trình đầu tiên](/docs/vi/language/program-structure) · [Khắc phục sự cố](/docs/vi/reference/diagnostics)

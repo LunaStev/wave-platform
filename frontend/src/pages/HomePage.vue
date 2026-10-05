@@ -28,8 +28,8 @@ const sponsors = ref<SponsorsView | null>(null)
 const copied = ref(false)
 const installPlatform = ref<'unix' | 'windows'>('unix')
 const installCommand = computed(() => installPlatform.value === 'windows'
-  ? 'irm https://wave-lang.dev/install.ps1 -OutFile install.ps1; powershell -ExecutionPolicy Bypass -File .\\install.ps1 -Latest'
-  : 'curl -fsSL https://wave-lang.dev/install.sh | bash -s -- latest')
+  ? 'irm https://wave-lang.dev/install.ps1 -OutFile install.ps1; powershell -ExecutionPolicy Bypass -File .\\install.ps1'
+  : 'curl -fsSL https://wave-lang.dev/install.sh | bash')
 
 const docs = computed(() => [
   { path: 'getting-started/install', label: t('docs.installation'), detail: t('docs.installation.detail') },
