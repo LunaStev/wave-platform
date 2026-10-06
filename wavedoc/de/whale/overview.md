@@ -43,7 +43,7 @@ Das Referenzdokument definiert die semantischen Regeln für Whale. Verfügbare F
 | --- | --- | --- |
 |Assembler|Erstellen Sie ein verschiebbares Objekt ELF64 aus der Baugruppe AMD64|Unvollständige Abdeckung von Befehlen und Anweisungen|
 |Objektbibliothek|Objektzusammensetzung, payload ohne BSS, Zielvalidierung, AMD64 ELF64 Serialisierung und wählbare Wave Datensatzimplementierung zur Überprüfung der Größe.|Verschiebbare Objekte sind keine ausführbaren Dateien|
-| IR | Konstruktion, Druck, signaturgeprüfte direkte/indirekte Aufrufe, versionierte AST-Senkung, Zielvalidierung und geprüfte Typlayouts | AST/typed IR Format 2 und bitgenaue Konstanten sind verfügbar; eingegebenes IR-Parsing und Maschinenaufrufemission bleiben nicht verfügbar |
+| IR | Konstruktion, Druck, signaturgeprüfte direkte/indirekte Aufrufe, versionierte AST-Senkung, Zielvalidierung und geprüfte Typlayouts | AST format 2, typed IR format 3 und bitgenaue Konstanten verfügbar; typed-IR-Parser und Maschinenaufrufausgabe fehlen weiterhin |
 |Linker|Symbolinterpretation, Überprüfung des Eingabeziels, Überprüfung der Platzierung von Datei-/Speicherabschnitten|Die Anwendung einer vollständigen Verschiebung und die Ausgabe ausführbarer Dateien werden nicht unterstützt.|
 |Ausführen und Debuggen|In diesem Dokument definierte semantische Regeln|IR-Interpreter, vollständige native-Codegenerierung, Laufzeitinspektion des Trace-Speichers, DWARF-Ausgabe nicht unterstützt|
 

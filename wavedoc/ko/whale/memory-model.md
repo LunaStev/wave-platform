@@ -33,15 +33,15 @@ BSS의 물리적인 바이트가 0이라는 사실만으로 IR 변수의 초기�
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
 
   declare @f0 "initialized_local": whale () -> i32, linkage internal
 
-  fn @initialized_local() -> i32, id @f0 {
-  entry:
+  fn @f0 "initialized_local"() -> i32, entry %b0 {
+  %b0 "entry":
     %v0: ptr<i32> = alloca i32, align 4
     %v1: i32 = const i32 42
     store i32 %v1, ptr<i32> %v0, align 4

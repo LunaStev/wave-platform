@@ -43,7 +43,7 @@ Dokumen referensi mendefinisikan aturan semantik untuk Whale. Fitur yang tersedi
 | --- | --- | --- |
 |perakit|Buat ELF64 objek yang dapat direlokasi dari perakitan AMD64|Cakupan perintah dan arahan yang tidak lengkap|
 |perpustakaan objek|Komposisi objek, payload tanpa BSS, validasi target, AMD64 ELF64 serialisasi dan implementasi rekaman Wave yang dapat dipilih untuk memeriksa ukuran.|Objek yang dapat direlokasi bukanlah objek yang dapat dieksekusi|
-| IR | Konstruksi, pencetakan, panggilan langsung/tidak langsung yang diperiksa tanda tangan, penurunan versi AST, validasi target, dan tata letak tipe yang diperiksa | AST/diketik IR format 2 dan konstanta bit-tepat tersedia; mengetik IR parsing dan emisi panggilan mesin tetap tidak tersedia |
+| IR | Konstruksi, pencetakan, panggilan langsung/tidak langsung yang diperiksa tanda tangan, penurunan versi AST, validasi target, dan tata letak tipe yang diperiksa | AST format 2, typed IR format 3 dan konstanta dengan bit tepat tersedia; parser typed IR dan emisi panggilan mesin belum tersedia |
 |penghubung|Interpretasi simbol, verifikasi target input, inspeksi penempatan bagian file/memori|Menerapkan relokasi penuh dan mengeluarkan file yang dapat dieksekusi tidak didukung.|
 |Menjalankan dan Men-debug|Aturan semantik didefinisikan dalam dokumen ini|IR juru bahasa, selesaikan pembuatan kode native, pemeriksaan runtime memori jejak, keluaran DWARF tidak didukung|
 

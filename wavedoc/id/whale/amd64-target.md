@@ -35,11 +35,11 @@ whale ir lower program.json --target x86_64-whale-linux
 
 Target output menyediakan tata letak data 64-bit little-endian terlepas dari host build. Pengidentifikasi yang tidak dikenal atau kombinasi yang tidak didukung seperti `aarch64-whale-linux`, `x86_64-whale-windows` akan gagal dengan kesalahan saat memandu target yang didukung sebelum membaca input atau mengganti file output. `--no-verify` tidak menonaktifkan pemeriksaan pemilihan target.
 
-Memasukkan bagian kosong AST(`{"globals":[],"functions":[]}`) akan menampilkan header dan modul berikut:
+Memasukkan bagian kosong AST(`{"format_version":2,"semantics_version":1,"features":[],"program":{"declarations":[],"globals":[],"functions":[]}}`) akan menampilkan header dan modul berikut:
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }

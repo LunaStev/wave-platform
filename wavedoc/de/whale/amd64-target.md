@@ -35,11 +35,11 @@ whale ir lower program.json --target x86_64-whale-linux
 
 Das Ausgabeziel stellt unabhängig vom Build-Host ein 64-Bit-Little-Endian-Datenlayout bereit. Unbekannte Bezeichner oder nicht unterstützte Kombinationen wie „aarch64-whale-linux“ und „x86_64-whale-windows“ schlagen mit einem Fehler fehl, der das unterstützte Ziel anweist, bevor die Eingabe gelesen oder die Ausgabedatei ersetzt wird. Die Prüfung der Zielauswahl kann auch mit „--no-verify“ nicht ausgeschaltet werden.
 
-Wenn Sie das Leerzeichen AST(`{"globals":[],"functions":[]}`) eingeben, werden die folgenden Header und Module ausgegeben:
+Wenn Sie das Leerzeichen AST(`{"format_version":2,"semantics_version":1,"features":[],"program":{"declarations":[],"globals":[],"functions":[]}}`) eingeben, werden die folgenden Header und Module ausgegeben:
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }

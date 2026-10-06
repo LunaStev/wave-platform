@@ -43,15 +43,15 @@ La impresora genera IR:
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
 
   declare @f0 "answer": whale () -> i32, linkage internal
 
-  fn @answer() -> i32, id @f0 {
-  entry:
+  fn @f0 "answer"() -> i32, entry %b0 {
+  %b0 "entry":
     %v0: i32 = const i32 40
     %v1: i32 = const i32 2
     %v2: i32 = add i32 %v0, %v1
@@ -126,7 +126,7 @@ fn main() {
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
@@ -134,8 +134,8 @@ module {
   declare @f0 "identity": sysv64 (i32) -> i32, linkage external, link_name "identity_i32"
   declare @f1 "answer": whale () -> i32, linkage internal
 
-  fn @answer() -> i32, id @f1 {
-  entry:
+  fn @f1 "answer"() -> i32, entry %b0 {
+  %b0 "entry":
     %v0: i32 = const i32 42
     %v1: fnptr<sysv64 (i32) -> i32> = function_addr @f0
     %v2: i32 = call sysv64 i32 @f0(%v0)
@@ -172,7 +172,7 @@ El [ejemplo JSON completo](https://github.com/wavefnd/Whale/blob/master/ir/tests
 cargo run --locked --features socket-cli -- ir lower ir/tests/fixtures/ast-v2-calls.json
 ```
 
-Su [esperado IR](https://github.com/wavefnd/Whale/blob/master/ir/tests/fixtures/calls-v2.wir) se verifica en las pruebas de reducción. La identidad de la función y los nombres de los enlaces se representan en el límite IR; preservarlos mediante la generación y vinculación de objetos nativos sigue siendo un trabajo separado.
+Su [esperado IR](https://github.com/wavefnd/Whale/blob/master/ir/tests/fixtures/calls-v3.wir) se verifica en las pruebas de reducción. La identidad de la función y los nombres de los enlaces se representan en el límite IR; preservarlos mediante la generación y vinculación de objetos nativos sigue siendo un trabajo separado.
 
 ## Disponibilidad de bloques y valores.
 
@@ -212,6 +212,48 @@ Los números enteros se pasan como ancho de bits·signedness·números de cadena
 
 Puede utilizar los contratos escalares AST JSON que aparecen a continuación. La salida typed IR incluye información de la versión, pero aún no se admite el intercambio completo de ida y vuelta con el analizador de texto.
 
+
+### Identidades impresas y nombres entre comillas
+
+El formato 3 de typed IR imprime funciones como `@fN`, globales como `@gN`, valores como `%vN` y bloques como `%bN`. Los ID de funciones y globales pertenecen al módulo; los de valores y bloques, a la función que los contiene. Se conservan los ID suministrados, incluso si hay huecos. Los nombres entre comillas son anotaciones descriptivas y no resuelven referencias. Cada función declara `entry %bN`, independientemente del orden de almacenamiento de los bloques.
+
+Este módulo completo se verificó e imprimió con la API Rust de IR. Ambos bloques de rama se llaman `"branch"`; sus ID distinguen las definiciones y las entradas de phi.
+
+```text
+module {
+  format_version 3
+  semantics_version 1
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  declare @f0 "choose": whale (bool) -> i32, linkage internal
+
+  fn @f0 "choose"(%v0 "condition": bool) -> i32, entry %b0 {
+  %b0 "entry":
+    cbr bool %v0, label %b1, label %b2
+  %b1 "branch":
+    %v1: i32 = const i32 1
+    br label %b3
+  %b2 "branch":
+    %v2: i32 = const i32 2
+    br label %b3
+  %b3 "join":
+    %v99: i32 = phi i32 [ %v1, %b1 ], [ %v2, %b2 ]
+    ret i32 %v99
+  }
+
+}
+```
+
+`%v0` se define en la lista de parámetros. `%b1` y `%b2` son distintos aunque tengan el mismo nombre; phi identifica cada predecesor por ID. Las ramas y los destinos de switch usan la misma sintaxis de ID de bloque. El impresor no renumera el `%v99` explícito.
+
+Todos los nombres y cadenas usan comillas dobles: destino, nombres de funciones, globales, parámetros y bloques, nombres de enlace externo, declaraciones de constantes y motivos de trap. Unicode imprimible se conserva. Los escapes son `\"`, `\\`, `\n`, `\r`, `\t`, `\0` y `\u{hex}`, con hexadecimal en minúsculas para los demás caracteres de control y U+2028/U+2029. Un nombre con salto de línea, tabulación, comillas, barra inversa y texto coreano se imprime en un solo registro.
+
+```text
+"line\ncolumn\tquote\"slash\\한글"
+```
+
+Las definiciones impresas en formato 2 deben migrarse a ID explícitos, ID de parámetros, nombres entre comillas y una referencia de entrada. Solo cambia la sintaxis de typed IR; AST JSON conserva el formato 2 y semantics version sigue siendo 1. El analizador de texto y el lector de ida y vuelta aún no están disponibles.
 
 ### Versión especificada AST JSON
 
@@ -263,15 +305,15 @@ cargo run --locked --features socket-cli -- ir lower program.json
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
 
   declare @f0 "answer": whale () -> u128, linkage internal
 
-  fn @answer() -> u128, id @f0 {
-  entry:
+  fn @f0 "answer"() -> u128, entry %b0 {
+  %b0 "entry":
     %v0: u128 = const u128 340282366920938463463374607431768211455
     ret u128 %v0
   }
@@ -285,7 +327,7 @@ El número entero `value` es una cadena decimal. Signed Se utiliza un número de
 
 [El esquema JSON completo](https://github.com/wavefnd/Whale/blob/master/ir/schema/ast-v2.schema.json) especifica formas, campos obligatorios y variantes. También se aplican comprobaciones de rango/tipo y detección de claves duplicadas. El subconjunto de reducción escalar incluye literales, variables/constantes, agregar/sub/mul, comparaciones, asignación, si/mientras, regresar y romper/continuar. Se admiten referencias de funciones, llamadas directas y llamadas indirectas; Las expresiones agregadas no son compatibles. `Opaque` se puede representar en el esquema, pero no se puede reducir.
 
-La migración requiere empaquetar las cargas útiles antiguas del programa y reemplazar los literales numéricos JSON con cadenas de enteros decimales o cadenas de bits flotantes. Se rechazan las cargas útiles antiguas no versionadas. Las cargas útiles del formato 1 se deben migrar al formato 2: agregue `program.declarations` (una matriz vacía cuando no se utilice) y `convention`/`linkage` explícito en las definiciones. AST y los números de versión escritos IR son independientes; ambos son ahora 2, con la versión semántica 1.
+La migración exige envolver el antiguo Program sin envelope y sustituir los números JSON por cadenas decimales de enteros o cadenas de bits flotantes. Se rechazan entradas sin versión. El formato 1 debe migrarse al 2 añadiendo `program.declarations` (un array vacío si no se usa) y `convention`/`linkage` explícitos en las definiciones. Las versiones son independientes: AST format 2, typed IR format 3 y semantics version 1.
 
 ### Entrada rechazada y recuperación CLI
 

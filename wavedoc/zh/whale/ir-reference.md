@@ -43,15 +43,15 @@ fn main() {
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
 
   declare @f0 "answer": whale () -> i32, linkage internal
 
-  fn @answer() -> i32, id @f0 {
-  entry:
+  fn @f0 "answer"() -> i32, entry %b0 {
+  %b0 "entry":
     %v0: i32 = const i32 40
     %v1: i32 = const i32 2
     %v2: i32 = add i32 %v0, %v1
@@ -126,7 +126,7 @@ fn main() {
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
@@ -134,8 +134,8 @@ module {
   declare @f0 "identity": sysv64 (i32) -> i32, linkage external, link_name "identity_i32"
   declare @f1 "answer": whale () -> i32, linkage internal
 
-  fn @answer() -> i32, id @f1 {
-  entry:
+  fn @f1 "answer"() -> i32, entry %b0 {
+  %b0 "entry":
     %v0: i32 = const i32 42
     %v1: fnptr<sysv64 (i32) -> i32> = function_addr @f0
     %v2: i32 = call sysv64 i32 @f0(%v0)
@@ -172,7 +172,7 @@ module {
 cargo run --locked --features socket-cli -- ir lower ir/tests/fixtures/ast-v2-calls.json
 ```
 
-其[预期IR](https://github.com/wavefnd/Whale/blob/master/ir/tests/fixtures/calls-v2.wir)在降低测试中被检查。函数标识和链接名称在IR边界处表示；通过本机对象生成和链接来保留它们仍然是单独的工作。
+其[预期IR](https://github.com/wavefnd/Whale/blob/master/ir/tests/fixtures/calls-v3.wir)在降低测试中被检查。函数标识和链接名称在IR边界处表示；通过本机对象生成和链接来保留它们仍然是单独的工作。
 
 ## 块和值的可用性
 
@@ -212,6 +212,48 @@ AST 和 typed IR 使用各自的 format version 和通用 semantics version。�
 
 您可以使用下面的标量 AST JSON 合约。输出 typed IR 包含版本信息，但尚不支持与文本解析器的完整往返交换。
 
+
+### 输出标识符与带引号的名称
+
+typed IR format 3 用 `@fN` 表示函数、`@gN` 表示全局变量、`%vN` 表示值、`%bN` 表示基本块。函数和全局 ID 属于模块；值和基本块 ID 属于所在函数。即使编号不连续，也保留提供的 ID。带引号的名称只是说明，不用于解析引用。函数明确记录 `entry %bN`，不依赖基本块的存储顺序。
+
+以下完整模块通过 Rust IR API 验证并输出。两个分支块都叫 `"branch"`，但 ID 可以区分定义和 phi 输入。
+
+```text
+module {
+  format_version 3
+  semantics_version 1
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  declare @f0 "choose": whale (bool) -> i32, linkage internal
+
+  fn @f0 "choose"(%v0 "condition": bool) -> i32, entry %b0 {
+  %b0 "entry":
+    cbr bool %v0, label %b1, label %b2
+  %b1 "branch":
+    %v1: i32 = const i32 1
+    br label %b3
+  %b2 "branch":
+    %v2: i32 = const i32 2
+    br label %b3
+  %b3 "join":
+    %v99: i32 = phi i32 [ %v1, %b1 ], [ %v2, %b2 ]
+    ret i32 %v99
+  }
+
+}
+```
+
+`%v0` 在参数列表中定义。`%b1` 和 `%b2` 即使同名也不同，phi 通过 ID 指定各前驱块。分支和 switch 目标使用同样的基本块 ID 语法。打印器不会重新编号显式提供的 `%v99`。
+
+所有名称和字符串字段都使用双引号，包括目标、函数、全局变量、参数和基本块名称、外部链接名称、常量声明名称及 trap 原因。可打印的 Unicode 字符保持原样。转义序列为 `\"`、`\\`、`\n`、`\r`、`\t`、`\0`；其他控制字符以及 U+2028/U+2029 使用小写十六进制的 `\u{hex}`。包含换行、制表符、引号、反斜杠和韩文的名称也会输出为一条记录。
+
+```text
+"line\ncolumn\tquote\"slash\\한글"
+```
+
+format 2 的输出定义需要迁移到显式 ID、参数 ID、带引号的名称和入口引用。只有 typed IR 语法发生变化；AST JSON format 2 和 semantics version 1 保持不变。文本解析器和往返读取器仍不可用。
 
 ### 指定版本 AST JSON
 
@@ -263,15 +305,15 @@ cargo run --locked --features socket-cli -- ir lower program.json
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
 
   declare @f0 "answer": whale () -> u128, linkage internal
 
-  fn @answer() -> u128, id @f0 {
-  entry:
+  fn @f0 "answer"() -> u128, entry %b0 {
+  %b0 "entry":
     %v0: u128 = const u128 340282366920938463463374607431768211455
     ret u128 %v0
   }
@@ -285,7 +327,7 @@ module {
 
 [完整的JSON架构](https://github.com/wavefnd/Whale/blob/master/ir/schema/ast-v2.schema.json)指定形状、必填字段和变体。范围/类型检查和重复键检测还适用。标量降低子集包括文字、变量/常量、add/sub/mul、比较、赋值、if/while、返回和中断/继续。支持函数引用、直接调用和间接调用；不支持聚合表达式。 `Opaque` 在模式中可以表示，但不支持降低。
 
-迁移需要包装旧的裸程序有效负载并用十进制整数字符串或浮点位字符串替换数字JSON文字。旧的未版本控制的有效负载将被拒绝。格式 1 有效负载必须迁移到格式 2：在定义上添加 `program.declarations`（未使用时为空数组）和显式 `convention`/`linkage`。 AST和键入的IR版本号是独立的；现在两者都是 2，语义版本为 1。
+迁移时，需要将旧的裸 Program 包装为 envelope，并将 JSON 数字替换为十进制整数字符串或浮点位字符串。无版本输入会被拒绝。format 1 必须迁移到 format 2，添加 `program.declarations`（未使用时为空数组）以及定义中的显式 `convention` 和 `linkage`。AST 和 typed IR 的版本独立：AST format 为 2，typed IR format 为 3，semantics version 为 1。
 
 ### 拒绝输入和 CLI 恢复
 

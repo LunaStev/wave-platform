@@ -34,7 +34,7 @@ overflow에서 실행을 중단하는 언어의 프런트엔드는 checked 연�
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
@@ -42,16 +42,16 @@ module {
   declare @f0 "add_u8": whale () -> u8, linkage internal
   declare @f1 "require_no_overflow": whale () -> u8, linkage internal
 
-  fn @add_u8() -> u8, id @f0 {
-  entry:
+  fn @f0 "add_u8"() -> u8, entry %b0 {
+  %b0 "entry":
     %v0: u8 = const u8 255
     %v1: u8 = const u8 1
     %v2: u8 = add u8 %v0, %v1
     ret u8 %v2
   }
 
-  fn @require_no_overflow() -> u8, id @f1 {
-  entry:
+  fn @f1 "require_no_overflow"() -> u8, entry %b1 {
+  %b1 "entry":
     %v3: u8 = const u8 255
     %v4: u8 = const u8 1
     %v5: tuple<u8, bool> = uadd_chk u8 %v3, %v4
@@ -100,6 +100,87 @@ N비트 값의 시프트에서는 count의 비트열을 unsigned로 해석한 �
 float→int는 0 방향으로 절삭한 뒤 정수 범위를 검사합니다. NaN과 무한대는 trap입니다. i8로 변환할 때 127.9는 127이 되고, 128.0은 trap입니다. Bool은 정수 0 또는 1로 변환합니다. signed i1은 1을 표현할 수 없으므로 이 변환의 목적지로 사용할 수 없습니다.
 
 주소를 정수로 변환해도 그 정수로 포인터 접근 권한을 복구할 수 있는 것은 아닙니다. [포인터 유효성](memory-model)을 참고하세요.
+
+### cast와 checked 연산의 검증 형식
+
+검증은 실제 피연산자 타입과 `src_ty`가 같은지 확인한 뒤, opcode가 허용하는 원본·목적지 종류와 폭을 검사합니다. 결과 타입 표기도 정의와 일치해야 합니다. 암묵적 변환은 없습니다.
+
+| Opcode | 허용 타입 |
+| --- | --- |
+| `zext`, `sext` | Bool이 아닌 정수; 목적지 폭이 반드시 더 큼 |
+| Bool에서 `zext` | 정수 0/1 변환; signed `i1`을 제외한 모든 정수 목적지, `u1` 포함 |
+| `trunc` | Bool이 아닌 정수; 목적지 폭이 반드시 더 작음 |
+| `fext`, `ftrunc` | float; 목적지 폭이 반드시 더 큼 / 더 작음 |
+| `itof_s`, `itof_u` | signed / unsigned 정수에서 float |
+| `ftoi_s`, `ftoi_u` | float에서 signed / unsigned 정수 |
+| `bitcast` | 폭이 같은 정수·float 스칼라, 또는 데이터 포인터에서 데이터 포인터 |
+| `ptrtoint`, `inttoptr` | 데이터 포인터에서 정수 / 정수에서 데이터 포인터 |
+
+정수 확장·절단은 비트 연산이므로 정수 피연산자의 signedness가 달라도 됩니다. Bool은 별도 논리 타입이며 sign extension, 절단, `i1`/`u1`로의 bitcast를 허용하지 않습니다. aggregate와 함수 포인터 cast는 거부합니다. 포인터·정수의 종류 검증은 유효한 할당이나 접근 권한을 복구하지 않습니다. 실행 시 변환 검사와 기계어 lowering은 별도 미완료 범위입니다.
+
+다음 전체 Rust 프로그램은 유효한 변환 두 개를 출력하고, `zext`를 `fext`로 바꾸면 거부되는지 확인합니다.
+
+```rust
+use ir::*;
+
+fn main() {
+    let mut builder = ModuleBuilder::new("x86_64-whale-linux", DataLayout::default_64bit_le());
+    let mut function = builder.begin_function("widen", vec![("byte".into(), Type::U8)], Type::Void);
+    function.ret(None);
+    function.finish();
+    let mut module = builder.finish();
+    let function = &mut module.functions[0];
+    function.value_types.extend([(ValueId(1), Type::U32), (ValueId(2), Type::I32)]);
+    function.blocks[0].instructions.extend([
+        Instruction::Cast {
+            dst: ValueId(1), op: CastOp::ZExt,
+            src_ty: Type::U8, src: ValueId(0), dst_ty: Type::U32,
+        },
+        Instruction::Cast {
+            dst: ValueId(2), op: CastOp::Bitcast,
+            src_ty: Type::U32, src: ValueId(1), dst_ty: Type::I32,
+        },
+    ]);
+    verify_module(&module).unwrap();
+    print!("{}", print_module(&module));
+    // An integer source cannot be annotated as a floating widening operation.
+    if let Instruction::Cast { op, .. } = &mut module.functions[0].blocks[0].instructions[0] {
+        *op = CastOp::FExt;
+    }
+    assert!(matches!(verify_module(&module), Err(VerifyError::InvalidCast { .. })));
+}
+```
+
+```text
+module {
+  format_version 3
+  semantics_version 1
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  declare @f0 "widen": whale (u8) -> void, linkage internal
+
+  fn @f0 "widen"(%v0 "byte": u8) -> void, entry %b0 {
+  %b0 "entry":
+    %v1: u32 = zext u8 %v0 to u32
+    %v2: i32 = bitcast u32 %v1 to i32
+    ret void
+  }
+
+}
+```
+
+다음 명령 조각은 의도적으로 잘못된 IR입니다.
+
+```text
+%v1: i32 = ftoi_s f64 %v0 to i32   // Invalid when %v0 is actually Bool.
+%v2: i16 = zext i32 %v3 to i16     // zext cannot narrow.
+%v4: i1 = zext bool %v5 to i1      // Signed i1 cannot represent true as 1.
+```
+
+실제 원본 타입의 불일치는 `OperandTypeMismatch`, 허용되지 않는 타입 쌍은 opcode와 두 타입을 담은 `InvalidCast`입니다. 검증 오류는 변환을 삽입하거나 모듈을 변경하지 않습니다.
+
+`sadd_chk`, `ssub_chk`, `smul_chk`는 signed 정수, `uadd_chk`, `usub_chk`, `umul_chk`는 unsigned 정수 피연산자를 요구합니다. 양쪽 피연산자는 연산 타입 `T`와 정확히 같아야 하며 결과는 `tuple<T, bool>`이어야 합니다. 추출은 tuple, 존재하는 필드 인덱스, 해당 필드의 정확한 타입을 요구합니다. 특히 overflow 필드를 `i1`로 추출하면 거부합니다. 위의 wrap·overflow 결과는 실행 계약이며, 이 테스트는 구조 검증을 확인합니다. 구현된 실행 백엔드의 결과를 뜻하지 않습니다.
 
 ## 부동소수점 연산
 

@@ -43,15 +43,15 @@ Output printer IR:
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
 
   declare @f0 "answer": whale () -> i32, linkage internal
 
-  fn @answer() -> i32, id @f0 {
-  entry:
+  fn @f0 "answer"() -> i32, entry %b0 {
+  %b0 "entry":
     %v0: i32 = const i32 40
     %v1: i32 = const i32 2
     %v2: i32 = add i32 %v0, %v1
@@ -126,7 +126,7 @@ fn main() {
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
@@ -134,8 +134,8 @@ module {
   declare @f0 "identity": sysv64 (i32) -> i32, linkage external, link_name "identity_i32"
   declare @f1 "answer": whale () -> i32, linkage internal
 
-  fn @answer() -> i32, id @f1 {
-  entry:
+  fn @f1 "answer"() -> i32, entry %b0 {
+  %b0 "entry":
     %v0: i32 = const i32 42
     %v1: fnptr<sysv64 (i32) -> i32> = function_addr @f0
     %v2: i32 = call sysv64 i32 @f0(%v0)
@@ -172,7 +172,7 @@ Ini adalah fragmen ekspresi di dalam program format 2 AST:
 cargo run --locked --features socket-cli -- ir lower ir/tests/fixtures/ast-v2-calls.json
 ```
 
-[yang diharapkan IR](https://github.com/wavefnd/Whale/blob/master/ir/tests/fixtures/calls-v2.wir) diperiksa dalam pengujian penurunan. Identitas fungsi dan nama tautan direpresentasikan pada batas IR; melestarikannya melalui pembuatan objek asli dan menghubungkannya masih merupakan pekerjaan terpisah.
+[yang diharapkan IR](https://github.com/wavefnd/Whale/blob/master/ir/tests/fixtures/calls-v3.wir) diperiksa dalam pengujian penurunan. Identitas fungsi dan nama tautan direpresentasikan pada batas IR; melestarikannya melalui pembuatan objek asli dan menghubungkannya masih merupakan pekerjaan terpisah.
 
 ## Ketersediaan blok dan nilai
 
@@ -212,6 +212,48 @@ Bilangan bulat diteruskan sebagai nomor string lebar bit·signedness·. Konstant
 
 Anda dapat menggunakan kontrak skalar AST JSON di bawah. Keluaran typed IR menyertakan informasi versi, namun pertukaran bolak-balik penuh dengan parser teks belum didukung.
 
+
+### Identitas tercetak dan nama dalam tanda kutip
+
+Typed IR format 3 mencetak fungsi sebagai `@fN`, global sebagai `@gN`, nilai sebagai `%vN`, dan blok sebagai `%bN`. ID fungsi dan global berada dalam lingkup modul; ID nilai dan blok berada dalam fungsi yang memuatnya. ID yang diberikan dipertahankan, termasuk celah nomornya. Nama dalam tanda kutip hanya keterangan, bukan dasar penyelesaian referensi. Fungsi menyatakan `entry %bN` secara eksplisit tanpa bergantung pada urutan penyimpanan blok.
+
+Modul lengkap berikut diverifikasi dan dicetak melalui API IR Rust. Kedua blok cabang bernama `"branch"`, tetapi ID membedakan definisi dan masukan phi.
+
+```text
+module {
+  format_version 3
+  semantics_version 1
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  declare @f0 "choose": whale (bool) -> i32, linkage internal
+
+  fn @f0 "choose"(%v0 "condition": bool) -> i32, entry %b0 {
+  %b0 "entry":
+    cbr bool %v0, label %b1, label %b2
+  %b1 "branch":
+    %v1: i32 = const i32 1
+    br label %b3
+  %b2 "branch":
+    %v2: i32 = const i32 2
+    br label %b3
+  %b3 "join":
+    %v99: i32 = phi i32 [ %v1, %b1 ], [ %v2, %b2 ]
+    ret i32 %v99
+  }
+
+}
+```
+
+`%v0` didefinisikan dalam daftar parameter. `%b1` dan `%b2` tetap berbeda meskipun namanya sama; phi menunjukkan setiap pendahulu dengan ID. Cabang dan tujuan switch memakai sintaks ID blok yang sama. Pencetak tidak menomori ulang `%v99` yang diberikan secara eksplisit.
+
+Semua bidang nama dan string memakai tanda kutip ganda: target, nama fungsi, global, parameter dan blok, nama tautan eksternal, nama deklarasi konstanta, serta alasan trap. Unicode yang dapat dicetak dipertahankan. Escape yang dipakai ialah `\"`, `\\`, `\n`, `\r`, `\t`, `\0`, dan `\u{hex}` dengan digit heksadesimal huruf kecil untuk karakter kontrol lainnya serta U+2028/U+2029. Nama dengan baris baru, tab, tanda kutip, garis miring terbalik dan teks Korea tetap dicetak sebagai satu rekaman.
+
+```text
+"line\ncolumn\tquote\"slash\\한글"
+```
+
+Definisi keluaran format 2 harus dimigrasikan ke ID eksplisit, ID parameter, nama dalam tanda kutip dan referensi blok masuk. Hanya sintaks typed IR yang berubah; AST JSON format 2 dan semantics version 1 tetap sama. Parser teks dan pembaca round-trip masih belum tersedia.
 
 ### Versi yang ditentukan AST JSON
 
@@ -263,15 +305,15 @@ cargo run --locked --features socket-cli -- ir lower program.json
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
 
   declare @f0 "answer": whale () -> u128, linkage internal
 
-  fn @answer() -> u128, id @f0 {
-  entry:
+  fn @f0 "answer"() -> u128, entry %b0 {
+  %b0 "entry":
     %v0: u128 = const u128 340282366920938463463374607431768211455
     ret u128 %v0
   }
@@ -285,7 +327,7 @@ Bilangan bulat `value` adalah string desimal. Signed Angka digunakan setelah min
 
 [Skema JSON lengkap](https://github.com/wavefnd/Whale/blob/master/ir/schema/ast-v2.schema.json) menentukan bentuk, bidang yang wajib diisi, dan varian. Pemeriksaan rentang/jenis dan deteksi kunci duplikat juga berlaku. Subset penurun skalar mencakup literal, variabel/konstanta, tambah/sub/mul, perbandingan, penugasan, jika/sementara, kembali dan putus/lanjutkan. Referensi fungsi, panggilan langsung dan panggilan tidak langsung didukung; ekspresi agregat tidak didukung. `Opaque` dapat diwakili dalam skema tetapi tidak didukung oleh penurunan.
 
-Migrasi memerlukan pembungkusan muatan Program lama yang kosong dan mengganti literal numerik JSON dengan string bilangan bulat desimal atau string bit float. Payload lama yang tidak berversi ditolak. Muatan format 1 harus dimigrasikan ke format 2: tambahkan `program.declarations` (array kosong jika tidak digunakan) dan eksplisit `convention`/`linkage` pada definisi. AST dan nomor versi IR yang diketik bersifat independen; keduanya sekarang menjadi 2, dengan semantik versi 1.
+Migrasi memerlukan pembungkusan Program lama tanpa envelope dan penggantian angka JSON dengan string integer desimal atau string bit float. Masukan tanpa versi ditolak. Format 1 harus dimigrasikan ke format 2 dengan menambahkan `program.declarations` (array kosong bila tidak dipakai) dan `convention`/`linkage` eksplisit pada definisi. Versinya independen: AST format 2, typed IR format 3 dan semantics version 1.
 
 ### Masukan yang ditolak dan pemulihan CLI
 

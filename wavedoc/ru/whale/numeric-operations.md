@@ -34,7 +34,7 @@ summary: Описывает целочисленные операции wrap, ch
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
@@ -42,16 +42,16 @@ module {
   declare @f0 "add_u8": whale () -> u8, linkage internal
   declare @f1 "require_no_overflow": whale () -> u8, linkage internal
 
-  fn @add_u8() -> u8, id @f0 {
-  entry:
+  fn @f0 "add_u8"() -> u8, entry %b0 {
+  %b0 "entry":
     %v0: u8 = const u8 255
     %v1: u8 = const u8 1
     %v2: u8 = add u8 %v0, %v1
     ret u8 %v2
   }
 
-  fn @require_no_overflow() -> u8, id @f1 {
-  entry:
+  fn @f1 "require_no_overflow"() -> u8, entry %b1 {
+  %b1 "entry":
     %v3: u8 = const u8 255
     %v4: u8 = const u8 1
     %v5: tuple<u8, bool> = uadd_chk u8 %v3, %v4
@@ -100,6 +100,87 @@ module {
 Преобразование float-to-int отбрасывает дробную часть в направлении нуля, затем проверяется диапазон целых чисел. NaN и бесконечность вызывают ловушку. При преобразовании в i8 127,9 становится 127, а 128,0 — ловушкой. Bool преобразуется в целое число 0 или 1. Знак i1 не может представлять 1, поэтому он не может быть местом назначения этого преобразования.
 
 Преобразование адреса в целое число не восстанавливает доступ указателя к этому целому числу. Пожалуйста, обратитесь к [достоверность указателя](memory-model).
+
+### Проверяемые формы cast и операций checked
+
+Проверка сопоставляет фактический тип операнда с `src_ty`, затем проверяет разрешённые opcode категории и разрядности. Аннотация типа результата также должна совпадать с определением. Неявных преобразований нет.
+
+| Opcode | Допустимые типы |
+| --- | --- |
+| `zext`, `sext` | Целые кроме Bool; разрядность результата строго больше |
+| `zext` (Bool) | Bool в целое 0/1; все целые типы назначения кроме знакового `i1`, включая `u1` |
+| `trunc` | Целые кроме Bool; разрядность результата строго меньше |
+| `fext`, `ftrunc` | Числа с плавающей точкой; разрядность результата строго больше / меньше |
+| `itof_s`, `itof_u` | Знаковое / беззнаковое целое в число с плавающей точкой |
+| `ftoi_s`, `ftoi_u` | Число с плавающей точкой в знаковое / беззнаковое целое |
+| `bitcast` | Целые/вещественные скаляры одной разрядности либо указатель данных в указатель данных |
+| `ptrtoint`, `inttoptr` | Указатель данных в целое / целое в указатель данных |
+
+Расширение и усечение целых — битовые операции; знаковость целых операндов может различаться. Bool — отдельный логический тип: знаковое расширение, усечение и bitcast в `i1`/`u1` запрещены. Преобразования агрегатов и указателей функций отклоняются. Проверка категорий указателя и целого не создаёт корректного выделения памяти и не восстанавливает права доступа. Проверки преобразований во время исполнения и lowering в машинный код остаются отдельными незавершёнными задачами.
+
+Следующая полная программа Rust печатает два допустимых преобразования и подтверждает, что замена `zext` на `fext` отклоняется.
+
+```rust
+use ir::*;
+
+fn main() {
+    let mut builder = ModuleBuilder::new("x86_64-whale-linux", DataLayout::default_64bit_le());
+    let mut function = builder.begin_function("widen", vec![("byte".into(), Type::U8)], Type::Void);
+    function.ret(None);
+    function.finish();
+    let mut module = builder.finish();
+    let function = &mut module.functions[0];
+    function.value_types.extend([(ValueId(1), Type::U32), (ValueId(2), Type::I32)]);
+    function.blocks[0].instructions.extend([
+        Instruction::Cast {
+            dst: ValueId(1), op: CastOp::ZExt,
+            src_ty: Type::U8, src: ValueId(0), dst_ty: Type::U32,
+        },
+        Instruction::Cast {
+            dst: ValueId(2), op: CastOp::Bitcast,
+            src_ty: Type::U32, src: ValueId(1), dst_ty: Type::I32,
+        },
+    ]);
+    verify_module(&module).unwrap();
+    print!("{}", print_module(&module));
+    // An integer source cannot be annotated as a floating widening operation.
+    if let Instruction::Cast { op, .. } = &mut module.functions[0].blocks[0].instructions[0] {
+        *op = CastOp::FExt;
+    }
+    assert!(matches!(verify_module(&module), Err(VerifyError::InvalidCast { .. })));
+}
+```
+
+```text
+module {
+  format_version 3
+  semantics_version 1
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  declare @f0 "widen": whale (u8) -> void, linkage internal
+
+  fn @f0 "widen"(%v0 "byte": u8) -> void, entry %b0 {
+  %b0 "entry":
+    %v1: u32 = zext u8 %v0 to u32
+    %v2: i32 = bitcast u32 %v1 to i32
+    ret void
+  }
+
+}
+```
+
+Следующие фрагменты инструкций намеренно содержат некорректный IR.
+
+```text
+%v1: i32 = ftoi_s f64 %v0 to i32   // Invalid when %v0 is actually Bool.
+%v2: i16 = zext i32 %v3 to i16     // zext cannot narrow.
+%v4: i1 = zext bool %v5 to i1      // Signed i1 cannot represent true as 1.
+```
+
+Несовпадение фактического исходного типа даёт `OperandTypeMismatch`; недопустимая пара — `InvalidCast` с opcode и обоими типами. Ошибка проверки не вставляет преобразований и не изменяет модуль.
+
+`sadd_chk`, `ssub_chk`, `smul_chk` требуют знаковые целые, а `uadd_chk`, `usub_chk`, `umul_chk` — беззнаковые. Оба операнда должны точно соответствовать типу операции `T`, результат — `tuple<T, bool>`. Извлечение требует кортеж, существующий индекс поля и точный тип этого поля. В частности, извлечение поля переполнения как `i1` отклоняется. Описанные выше результаты wrap/переполнения остаются контрактом исполнения; эти тесты проверяют структуру, а не выполнение реализованным backend.
 
 ## арифметика с плавающей запятой
 

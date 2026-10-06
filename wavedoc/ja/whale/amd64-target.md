@@ -35,11 +35,11 @@ whale ir lower program.json --target x86_64-whale-linux
 
 出力ターゲットは、ビルドホストとは無関係に64ビットlittle-endianデータレイアウトを提供します。未知の識別子や`aarch64-whale-linux`、`x86_64-whale-windows`などの未サポートの組み合わせは、入力を読み取るか出力ファイルを置き換える前にサポートターゲットを案内するエラーで失敗します。 `--no-verify`でもターゲット選択チェックをオフにできません。
 
-空のAST（`{"globals":[],"functions":[]}`）を入力すると、次のヘッダーとモジュールが出力されます。
+空のAST（`{"format_version":2,"semantics_version":1,"features":[],"program":{"declarations":[],"globals":[],"functions":[]}}`）を入力すると、次のヘッダーとモジュールが出力されます。
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }

@@ -50,21 +50,21 @@ return·break·continue之后的句子也保持在不连接的块中。由于此
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
 
   declare @f0 "preserved": whale () -> void, linkage internal
 
-  fn @preserved() -> void, id @f0 {
-  entry:
+  fn @f0 "preserved"() -> void, entry %b0 {
+  %b0 "entry":
     %v0: i32 = const i32 1
     %v1: i32 = const i32 2
     %v2: i32 = add i32 %v0, %v1
     %v3: i32 = const_decl "count" add(i32 1, i32 2) => const i32 3
     ret void
-  unreachable.cont:
+  %b1 "unreachable.cont":
     %v4: i32 = const i32 4
     %v5: i32 = const i32 5
     %v6: i32 = add i32 %v4, %v5

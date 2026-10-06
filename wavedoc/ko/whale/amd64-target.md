@@ -35,11 +35,11 @@ whale ir lower program.json --target x86_64-whale-linux
 
 출력 타깃은 빌드 호스트와 무관하게 64비트 little-endian 데이터 레이아웃을 제공합니다. 알 수 없는 식별자나 `aarch64-whale-linux`, `x86_64-whale-windows` 같은 미지원 조합은 입력을 읽거나 출력 파일을 교체하기 전에 지원 타깃을 안내하는 오류로 실패합니다. `--no-verify`로도 타깃 선택 검사를 끌 수 없습니다.
 
-빈 AST(`{"globals":[],"functions":[]}`)를 입력하면 다음 헤더와 모듈을 출력합니다.
+빈 AST(`{"format_version":2,"semantics_version":1,"features":[],"program":{"declarations":[],"globals":[],"functions":[]}}`)를 입력하면 다음 헤더와 모듈을 출력합니다.
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }

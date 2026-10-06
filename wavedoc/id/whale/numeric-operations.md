@@ -34,7 +34,7 @@ Modul berikut dikonfigurasi sebagai Rust builder dan merupakan keluaran printer 
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
@@ -42,16 +42,16 @@ module {
   declare @f0 "add_u8": whale () -> u8, linkage internal
   declare @f1 "require_no_overflow": whale () -> u8, linkage internal
 
-  fn @add_u8() -> u8, id @f0 {
-  entry:
+  fn @f0 "add_u8"() -> u8, entry %b0 {
+  %b0 "entry":
     %v0: u8 = const u8 255
     %v1: u8 = const u8 1
     %v2: u8 = add u8 %v0, %v1
     ret u8 %v2
   }
 
-  fn @require_no_overflow() -> u8, id @f1 {
-  entry:
+  fn @f1 "require_no_overflow"() -> u8, entry %b1 {
+  %b1 "entry":
     %v3: u8 = const u8 255
     %v4: u8 = const u8 1
     %v5: tuple<u8, bool> = uadd_chk u8 %v3, %v4
@@ -100,6 +100,87 @@ Misalnya, mengubah 8-bit `11111111` menjadi 16-bit zero extension menjadi `00000
 konversi float-to-int terpotong menuju nol, lalu periksa rentang bilangan bulat. NaN dan ketidakterbatasan menyebabkan jebakan. Saat mengonversi ke i8, 127,9 menjadi 127, sedangkan 128,0 menjebak. Bool dikonversi ke bilangan bulat 0 atau 1. i1 yang ditandatangani tidak dapat mewakili 1, sehingga tidak dapat menjadi tujuan konversi ini.
 
 Mengonversi alamat menjadi bilangan bulat tidak memulihkan akses penunjuk ke bilangan bulat tersebut. Silakan merujuk ke [validitas penunjuk](memory-model).
+
+### Bentuk cast dan operasi checked yang diverifikasi
+
+Verifikasi membandingkan tipe operan sebenarnya dengan `src_ty`, lalu memeriksa kategori dan lebar asal/tujuan yang diizinkan opcode. Anotasi tipe hasil juga harus sesuai dengan definisinya. Tidak ada konversi implisit.
+
+| Opcode | Tipe yang diterima |
+| --- | --- |
+| `zext`, `sext` | Integer selain Bool; lebar tujuan harus lebih besar |
+| `zext` (Bool) | Bool ke integer 0/1; semua tujuan integer kecuali `i1` bertanda, termasuk `u1` |
+| `trunc` | Integer selain Bool; lebar tujuan harus lebih kecil |
+| `fext`, `ftrunc` | Float; lebar tujuan harus lebih besar / lebih kecil |
+| `itof_s`, `itof_u` | Integer bertanda / tanpa tanda ke float |
+| `ftoi_s`, `ftoi_u` | Float ke integer bertanda / tanpa tanda |
+| `bitcast` | Skalar integer/float dengan lebar sama, atau pointer data ke pointer data |
+| `ptrtoint`, `inttoptr` | Pointer data ke integer / integer ke pointer data |
+
+Ekstensi dan pemotongan integer adalah operasi bit; sifat bertanda operan integer boleh berbeda. Bool adalah tipe logis tersendiri: ekstensi tanda, pemotongan dan bitcast ke `i1`/`u1` dilarang. Cast agregat dan pointer fungsi ditolak. Validasi kategori pointer/integer tidak membuktikan alokasi yang sah atau memulihkan izin akses. Pemeriksaan konversi saat eksekusi dan lowering ke kode mesin masih merupakan pekerjaan terpisah yang belum selesai.
+
+Program Rust lengkap berikut mencetak dua konversi yang sah, lalu memastikan penggantian `zext` dengan `fext` ditolak.
+
+```rust
+use ir::*;
+
+fn main() {
+    let mut builder = ModuleBuilder::new("x86_64-whale-linux", DataLayout::default_64bit_le());
+    let mut function = builder.begin_function("widen", vec![("byte".into(), Type::U8)], Type::Void);
+    function.ret(None);
+    function.finish();
+    let mut module = builder.finish();
+    let function = &mut module.functions[0];
+    function.value_types.extend([(ValueId(1), Type::U32), (ValueId(2), Type::I32)]);
+    function.blocks[0].instructions.extend([
+        Instruction::Cast {
+            dst: ValueId(1), op: CastOp::ZExt,
+            src_ty: Type::U8, src: ValueId(0), dst_ty: Type::U32,
+        },
+        Instruction::Cast {
+            dst: ValueId(2), op: CastOp::Bitcast,
+            src_ty: Type::U32, src: ValueId(1), dst_ty: Type::I32,
+        },
+    ]);
+    verify_module(&module).unwrap();
+    print!("{}", print_module(&module));
+    // An integer source cannot be annotated as a floating widening operation.
+    if let Instruction::Cast { op, .. } = &mut module.functions[0].blocks[0].instructions[0] {
+        *op = CastOp::FExt;
+    }
+    assert!(matches!(verify_module(&module), Err(VerifyError::InvalidCast { .. })));
+}
+```
+
+```text
+module {
+  format_version 3
+  semantics_version 1
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  declare @f0 "widen": whale (u8) -> void, linkage internal
+
+  fn @f0 "widen"(%v0 "byte": u8) -> void, entry %b0 {
+  %b0 "entry":
+    %v1: u32 = zext u8 %v0 to u32
+    %v2: i32 = bitcast u32 %v1 to i32
+    ret void
+  }
+
+}
+```
+
+Potongan instruksi berikut sengaja merupakan IR yang tidak sah.
+
+```text
+%v1: i32 = ftoi_s f64 %v0 to i32   // Invalid when %v0 is actually Bool.
+%v2: i16 = zext i32 %v3 to i16     // zext cannot narrow.
+%v4: i1 = zext bool %v5 to i1      // Signed i1 cannot represent true as 1.
+```
+
+Ketidakcocokan tipe asal sebenarnya menghasilkan `OperandTypeMismatch`; pasangan tipe yang tidak sah menghasilkan `InvalidCast` dengan opcode dan kedua tipe. Kesalahan verifikasi tidak menyisipkan konversi atau mengubah modul.
+
+`sadd_chk`, `ssub_chk` dan `smul_chk` memerlukan integer bertanda; `uadd_chk`, `usub_chk` dan `umul_chk` memerlukan integer tanpa tanda. Kedua operan harus persis sama dengan tipe operasi `T`, dan hasilnya harus `tuple<T, bool>`. Ekstraksi memerlukan tuple, indeks bidang yang ada, dan tipe tepat bidang tersebut. Ekstraksi bidang overflow sebagai `i1` khususnya ditolak. Hasil wrap/overflow di atas tetap menjadi kontrak eksekusi; pengujian ini memeriksa struktur, bukan eksekusi oleh backend yang sudah diimplementasikan.
 
 ## aritmatika titik mengambang
 
