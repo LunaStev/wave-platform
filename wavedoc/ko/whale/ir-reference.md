@@ -43,15 +43,15 @@ fn main() {
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
 
   declare @f0 "answer": whale () -> i32, linkage internal
 
-  fn @answer() -> i32, id @f0 {
-  entry:
+  fn @f0 "answer"() -> i32, entry %b0 {
+  %b0 "entry":
     %v0: i32 = const i32 40
     %v1: i32 = const i32 2
     %v2: i32 = add i32 %v0, %v1
@@ -126,7 +126,7 @@ fn main() {
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
@@ -134,8 +134,8 @@ module {
   declare @f0 "identity": sysv64 (i32) -> i32, linkage external, link_name "identity_i32"
   declare @f1 "answer": whale () -> i32, linkage internal
 
-  fn @answer() -> i32, id @f1 {
-  entry:
+  fn @f1 "answer"() -> i32, entry %b0 {
+  %b0 "entry":
     %v0: i32 = const i32 42
     %v1: fnptr<sysv64 (i32) -> i32> = function_addr @f0
     %v2: i32 = call sysv64 i32 @f0(%v0)
@@ -172,7 +172,7 @@ module {
 cargo run --locked --features socket-cli -- ir lower ir/tests/fixtures/ast-v2-calls.json
 ```
 
-[예상 IR](https://github.com/wavefnd/Whale/blob/master/ir/tests/fixtures/calls-v2.wir)은 lowering 테스트에서 비교합니다. 함수 식별자와 연결 이름은 IR 경계에서 표현하며, native 오브젝트 생성·링크까지 보존하는 작업은 별도입니다.
+[예상 IR](https://github.com/wavefnd/Whale/blob/master/ir/tests/fixtures/calls-v3.wir)은 lowering 테스트에서 비교합니다. 함수 식별자와 연결 이름은 IR 경계에서 표현하며, native 오브젝트 생성·링크까지 보존하는 작업은 별도입니다.
 
 ## 블록과 값의 사용 가능성
 
@@ -212,6 +212,48 @@ AST와 typed IR은 각각의 format version과 공통 semantics version을 사�
 
 아래 스칼라 AST JSON 계약을 사용할 수 있습니다. 출력되는 typed IR에는 버전 정보가 포함되지만 텍스트 파서와 완전한 왕복 교환은 아직 미지원입니다.
 
+
+### 출력 식별자와 인용된 이름
+
+typed IR format 3은 함수 식별자를 `@fN`, 전역을 `@gN`, 값을 `%vN`, 블록을 `%bN`으로 출력합니다. 함수·전역 ID는 모듈에, 값·블록 ID는 해당 함수에 속합니다. 번호에 빈 구간이 있어도 입력 ID를 보존합니다. 인용된 이름은 설명용 표기이며 참조 해석에 사용하지 않습니다. 함수는 블록 저장 순서와 독립적으로 `entry %bN`을 명시합니다.
+
+다음 전체 모듈은 Rust IR API에서 검증하고 출력했습니다. 두 분기 블록의 이름이 모두 `"branch"`이지만, ID가 정의와 phi 입력을 구분합니다.
+
+```text
+module {
+  format_version 3
+  semantics_version 1
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  declare @f0 "choose": whale (bool) -> i32, linkage internal
+
+  fn @f0 "choose"(%v0 "condition": bool) -> i32, entry %b0 {
+  %b0 "entry":
+    cbr bool %v0, label %b1, label %b2
+  %b1 "branch":
+    %v1: i32 = const i32 1
+    br label %b3
+  %b2 "branch":
+    %v2: i32 = const i32 2
+    br label %b3
+  %b3 "join":
+    %v99: i32 = phi i32 [ %v1, %b1 ], [ %v2, %b2 ]
+    ret i32 %v99
+  }
+
+}
+```
+
+`%v0`은 매개변수 목록에서 정의됩니다. `%b1`과 `%b2`는 이름이 같아도 별개이며, phi는 ID로 각 선행 블록을 지정합니다. 분기와 switch 목적지도 같은 블록 ID 문법을 사용합니다. 프린터는 명시적으로 지정한 `%v99`의 번호를 바꾸지 않습니다.
+
+모든 이름·문자열 필드는 큰따옴표를 사용합니다. 타깃, 함수·전역·매개변수·블록 이름, 외부 연결 이름, 상수 선언 이름, trap 이유에 같은 규칙을 적용합니다. 출력 가능한 Unicode 문자는 그대로 남깁니다. escape는 `\"`, `\\`, `\n`, `\r`, `\t`, `\0`이며, 그 밖의 제어 문자와 U+2028/U+2029에는 소문자 16진수의 `\u{hex}`를 사용합니다. 예를 들어 개행·탭·따옴표·역슬래시·한글이 포함된 이름도 한 레코드로 출력됩니다.
+
+```text
+"line\ncolumn\tquote\"slash\\한글"
+```
+
+format 2 출력 정의는 명시적 ID, 매개변수 ID, 인용된 이름, 진입 블록 참조로 마이그레이션해야 합니다. typed IR 문법만 변경하며 AST JSON format 2와 semantics version 1은 유지합니다. 텍스트 파서와 round-trip reader는 아직 제공하지 않습니다.
 
 ### 버전이 명시된 AST JSON
 
@@ -263,15 +305,15 @@ cargo run --locked --features socket-cli -- ir lower program.json
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
 
   declare @f0 "answer": whale () -> u128, linkage internal
 
-  fn @answer() -> u128, id @f0 {
-  entry:
+  fn @f0 "answer"() -> u128, entry %b0 {
+  %b0 "entry":
     %v0: u128 = const u128 340282366920938463463374607431768211455
     ret u128 %v0
   }
@@ -285,7 +327,7 @@ module {
 
 [전체 JSON Schema](https://github.com/wavefnd/Whale/blob/master/ir/schema/ast-v2.schema.json)는 형태·필수 필드·variant를 정의합니다. 범위·타입 검사와 중복 키 검사가 추가로 적용됩니다. 스칼라 lowering은 리터럴, 변수·상수, add/sub/mul, 비교, 대입, if/while, return과 break/continue를 지원합니다. 함수 참조·직접 호출·간접 호출을 지원하며, 복합 값 표현식은 미지원입니다. `Opaque`는 스키마에서 표현할 수 있지만 lowering에서 거부합니다.
 
-기존의 bare Program에는 envelope를 추가하고 JSON 숫자 리터럴을 정수의 10진 문자열 또는 float 비트 문자열로 바꿔야 합니다. 무버전 입력은 거부합니다. 형식 1 입력은 형식 2로 옮기면서 `program.declarations` 배열(사용하지 않으면 빈 배열)과 함수 정의의 명시적인 `convention`·`linkage`를 추가해야 합니다. AST와 typed IR은 독립적으로 버전을 관리하며 둘 다 형식 버전 2, 의미 버전 1을 사용합니다.
+기존의 bare Program에는 envelope를 추가하고 JSON 숫자 리터럴을 정수의 10진 문자열 또는 float 비트 문자열로 바꿔야 합니다. 무버전 입력은 거부합니다. 형식 1 입력은 형식 2로 옮기면서 `program.declarations` 배열(사용하지 않으면 빈 배열)과 함수 정의의 명시적인 `convention`·`linkage`를 추가해야 합니다. AST와 typed IR은 독립적으로 버전을 관리합니다. 현재 AST 형식은 2, typed IR 형식은 3이며 의미 버전은 1입니다.
 
 ### 거부되는 입력과 CLI 복구
 

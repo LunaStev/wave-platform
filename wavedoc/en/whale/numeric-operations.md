@@ -34,7 +34,7 @@ This module was constructed with the Rust builder and accepted by the verifier. 
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
@@ -42,16 +42,16 @@ module {
   declare @f0 "add_u8": whale () -> u8, linkage internal
   declare @f1 "require_no_overflow": whale () -> u8, linkage internal
 
-  fn @add_u8() -> u8, id @f0 {
-  entry:
+  fn @f0 "add_u8"() -> u8, entry %b0 {
+  %b0 "entry":
     %v0: u8 = const u8 255
     %v1: u8 = const u8 1
     %v2: u8 = add u8 %v0, %v1
     ret u8 %v2
   }
 
-  fn @require_no_overflow() -> u8, id @f1 {
-  entry:
+  fn @f1 "require_no_overflow"() -> u8, entry %b1 {
+  %b1 "entry":
     %v3: u8 = const u8 255
     %v4: u8 = const u8 1
     %v5: tuple<u8, bool> = uadd_chk u8 %v3, %v4
@@ -100,6 +100,87 @@ For example, extending the bit pattern `11111111` from 8 to 16 bits by zero exte
 Float-to-integer conversion truncates toward zero, then checks the integer range. NaN and infinity trap. For conversion to i8, 127.9 produces 127, while 128.0 traps. Bool converts to integer 0 or 1, except that signed i1 is not a permitted destination for this conversion because it cannot represent 1.
 
 Converting an address to an integer does not preserve a right to recover pointer access permissions from that integer. See [pointer validity](memory-model).
+
+### Verified cast and checked-operation shapes
+
+Verification checks the actual operand type against `src_ty`, then checks the opcode's allowed source/destination categories and widths. A result annotation must also match its definition. There are no implicit conversions.
+
+| Opcode | Accepted types |
+| --- | --- |
+| `zext`, `sext` | Non-Bool integers; destination width strictly larger |
+| `zext` from Bool | Integer 0/1 conversion; every integer destination except signed `i1`, including `u1` |
+| `trunc` | Non-Bool integers; destination width strictly smaller |
+| `fext`, `ftrunc` | Floats; strictly larger / strictly smaller destination width |
+| `itof_s`, `itof_u` | Signed / unsigned integer to float |
+| `ftoi_s`, `ftoi_u` | Float to signed / unsigned integer |
+| `bitcast` | Equal-width integer/float scalars, or data pointer to data pointer |
+| `ptrtoint`, `inttoptr` | Data pointer to integer / integer to data pointer |
+
+Integer extension and truncation are bit operations; their integer operands may differ in signedness. Bool is a separate logical type: it cannot be sign-extended, truncated or bitcast as `i1`/`u1`. Aggregate and function-pointer casts are rejected. Pointer/integer category validation does not establish a valid allocation or restore permissions. Runtime conversion checks and machine lowering remain separate work.
+
+This complete Rust program emits two valid conversions, then confirms that replacing `zext` with `fext` is rejected:
+
+```rust
+use ir::*;
+
+fn main() {
+    let mut builder = ModuleBuilder::new("x86_64-whale-linux", DataLayout::default_64bit_le());
+    let mut function = builder.begin_function("widen", vec![("byte".into(), Type::U8)], Type::Void);
+    function.ret(None);
+    function.finish();
+    let mut module = builder.finish();
+    let function = &mut module.functions[0];
+    function.value_types.extend([(ValueId(1), Type::U32), (ValueId(2), Type::I32)]);
+    function.blocks[0].instructions.extend([
+        Instruction::Cast {
+            dst: ValueId(1), op: CastOp::ZExt,
+            src_ty: Type::U8, src: ValueId(0), dst_ty: Type::U32,
+        },
+        Instruction::Cast {
+            dst: ValueId(2), op: CastOp::Bitcast,
+            src_ty: Type::U32, src: ValueId(1), dst_ty: Type::I32,
+        },
+    ]);
+    verify_module(&module).unwrap();
+    print!("{}", print_module(&module));
+    // An integer source cannot be annotated as a floating widening operation.
+    if let Instruction::Cast { op, .. } = &mut module.functions[0].blocks[0].instructions[0] {
+        *op = CastOp::FExt;
+    }
+    assert!(matches!(verify_module(&module), Err(VerifyError::InvalidCast { .. })));
+}
+```
+
+```text
+module {
+  format_version 3
+  semantics_version 1
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  declare @f0 "widen": whale (u8) -> void, linkage internal
+
+  fn @f0 "widen"(%v0 "byte": u8) -> void, entry %b0 {
+  %b0 "entry":
+    %v1: u32 = zext u8 %v0 to u32
+    %v2: i32 = bitcast u32 %v1 to i32
+    ret void
+  }
+
+}
+```
+
+The following instruction fragments are deliberately invalid:
+
+```text
+%v1: i32 = ftoi_s f64 %v0 to i32   // Invalid when %v0 is actually Bool.
+%v2: i16 = zext i32 %v3 to i16     // zext cannot narrow.
+%v4: i1 = zext bool %v5 to i1      // Signed i1 cannot represent true as 1.
+```
+
+A mismatched actual source yields `OperandTypeMismatch`; an illegal pair yields `InvalidCast` with the opcode and both types. Neither error inserts a conversion or changes the module.
+
+`sadd_chk`, `ssub_chk`, and `smul_chk` require signed integer operands; `uadd_chk`, `usub_chk`, and `umul_chk` require unsigned integer operands. Both operands must exactly match the operation type `T`, and the result must be `tuple<T, bool>`. Extraction requires a tuple, an existing field index, and that field's exact type. In particular, extracting the overflow field as `i1` is rejected. The wrapping/overflow results described above remain the execution contract; these tests establish structural verification, not execution by an implemented backend.
 
 ## Floating-point arithmetic
 

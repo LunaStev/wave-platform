@@ -43,15 +43,15 @@ The printer produces:
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
 
   declare @f0 "answer": whale () -> i32, linkage internal
 
-  fn @answer() -> i32, id @f0 {
-  entry:
+  fn @f0 "answer"() -> i32, entry %b0 {
+  %b0 "entry":
     %v0: i32 = const i32 40
     %v1: i32 = const i32 2
     %v2: i32 = add i32 %v0, %v1
@@ -126,7 +126,7 @@ fn main() {
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
@@ -134,8 +134,8 @@ module {
   declare @f0 "identity": sysv64 (i32) -> i32, linkage external, link_name "identity_i32"
   declare @f1 "answer": whale () -> i32, linkage internal
 
-  fn @answer() -> i32, id @f1 {
-  entry:
+  fn @f1 "answer"() -> i32, entry %b0 {
+  %b0 "entry":
     %v0: i32 = const i32 42
     %v1: fnptr<sysv64 (i32) -> i32> = function_addr @f0
     %v2: i32 = call sysv64 i32 @f0(%v0)
@@ -172,7 +172,7 @@ The [complete JSON example](https://github.com/wavefnd/Whale/blob/master/ir/test
 cargo run --locked --features socket-cli -- ir lower ir/tests/fixtures/ast-v2-calls.json
 ```
 
-Its [expected IR](https://github.com/wavefnd/Whale/blob/master/ir/tests/fixtures/calls-v2.wir) is checked in the lowering tests. Function identity and link names are represented at the IR boundary; preserving them through native object generation and linking is still separate work.
+Its [expected IR](https://github.com/wavefnd/Whale/blob/master/ir/tests/fixtures/calls-v3.wir) is checked in the lowering tests. Function identity and link names are represented at the IR boundary; preserving them through native object generation and linking is still separate work.
 
 ## Blocks and value availability
 
@@ -212,6 +212,48 @@ Integers carry a bit width, signedness, and a textual numeric value. Floating-po
 
 The scalar AST JSON contract below is available. Printed typed IR carries version metadata, but its parser and full round-trip interchange remain unavailable.
 
+
+### Printed identities and quoted names
+
+Typed IR format 3 prints function identities as `@fN`, globals as `@gN`, values as `%vN`, and blocks as `%bN`. Function and global IDs belong to the module; value and block IDs belong to the containing function. Preserve the supplied IDs, including gaps. Quoted names are descriptive annotations and are not used to resolve references. A function explicitly records `entry %bN`, independent of the order of its stored blocks.
+
+This complete module was verified and printed through the Rust IR API. Both branch blocks are named `"branch"`; the IDs distinguish their definitions and the phi inputs:
+
+```text
+module {
+  format_version 3
+  semantics_version 1
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  declare @f0 "choose": whale (bool) -> i32, linkage internal
+
+  fn @f0 "choose"(%v0 "condition": bool) -> i32, entry %b0 {
+  %b0 "entry":
+    cbr bool %v0, label %b1, label %b2
+  %b1 "branch":
+    %v1: i32 = const i32 1
+    br label %b3
+  %b2 "branch":
+    %v2: i32 = const i32 2
+    br label %b3
+  %b3 "join":
+    %v99: i32 = phi i32 [ %v1, %b1 ], [ %v2, %b2 ]
+    ret i32 %v99
+  }
+
+}
+```
+
+`%v0` is defined by the parameter list, `%b1` and `%b2` are distinct despite their equal names, and the phi identifies each predecessor by ID. Branches and switch destinations use the same block-ID syntax. The printer does not renumber the explicitly supplied `%v99`.
+
+All name and string fields use double quotes: target, function/global/parameter/block names, external link names, constant declaration names and trap reasons. Printable Unicode remains literal. The escapes are `\"`, `\\`, `\n`, `\r`, `\t`, `\0`, and `\u{hex}` with lowercase hexadecimal for other control characters and U+2028/U+2029. For example, a name containing a newline, tab, quote, backslash and Korean text prints on one record:
+
+```text
+"line\ncolumn\tquote\"slash\\한글"
+```
+
+Format 2 printed definitions must be migrated to explicit IDs, parameter IDs, quoted names and an entry reference. This changes only typed IR syntax; AST JSON format 2 and semantics version 1 remain unchanged. A textual parser and round-trip reader remain unavailable.
 
 ### Versioned AST JSON
 
@@ -263,15 +305,15 @@ cargo run --locked --features socket-cli -- ir lower program.json
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
 
   declare @f0 "answer": whale () -> u128, linkage internal
 
-  fn @answer() -> u128, id @f0 {
-  entry:
+  fn @f0 "answer"() -> u128, entry %b0 {
+  %b0 "entry":
     %v0: u128 = const u128 340282366920938463463374607431768211455
     ret u128 %v0
   }
@@ -285,7 +327,7 @@ Integer `value` is a decimal string: optional minus for signed integers, followe
 
 [The complete JSON Schema](https://github.com/wavefnd/Whale/blob/master/ir/schema/ast-v2.schema.json) specifies shapes, required fields and variants. Range/type checks and duplicate-key detection additionally apply. The scalar lowering subset includes literals, variables/constants, add/sub/mul, comparisons, assignment, if/while, return and break/continue. Function references, direct calls and indirect calls are supported; aggregate expressions are unsupported. `Opaque` is representable in the schema but unsupported by lowering.
 
-Migration requires wrapping old bare Program payloads and replacing numeric JSON literals with decimal integer strings or float bit strings. Old unversioned payloads are rejected. Format 1 payloads must be migrated to format 2: add `program.declarations` (an empty array when unused) and explicit `convention`/`linkage` on definitions. AST and typed IR version numbers are independent; both are now 2, with semantics version 1.
+Migration requires wrapping old bare Program payloads and replacing numeric JSON literals with decimal integer strings or float bit strings. Old unversioned payloads are rejected. Format 1 payloads must be migrated to format 2: add `program.declarations` (an empty array when unused) and explicit `convention`/`linkage` on definitions. AST and typed IR version numbers are independent: AST format 2, typed IR format 3, and semantics version 1.
 
 ### Rejected input and CLI recovery
 

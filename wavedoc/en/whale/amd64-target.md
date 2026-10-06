@@ -35,11 +35,11 @@ whale ir lower program.json --target x86_64-whale-linux
 
 The target supplies a 64-bit, little-endian data layout independently of the build host. An unknown identifier or unsupported combination, such as `aarch64-whale-linux` or `x86_64-whale-windows`, fails with the supported choice before reading the input or replacing an output file. `--no-verify` does not disable target selection checks.
 
-For an empty AST (`{"globals":[],"functions":[]}`), the command prints the following IR header and module:
+For an empty AST (`{"format_version":2,"semantics_version":1,"features":[],"program":{"declarations":[],"globals":[],"functions":[]}}`), the command prints the following IR header and module:
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
