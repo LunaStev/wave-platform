@@ -34,7 +34,7 @@ Die folgenden Module sind als Rust builder konfiguriert und stellen die aktuelle
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
@@ -42,16 +42,16 @@ module {
   declare @f0 "add_u8": whale () -> u8, linkage internal
   declare @f1 "require_no_overflow": whale () -> u8, linkage internal
 
-  fn @add_u8() -> u8, id @f0 {
-  entry:
+  fn @f0 "add_u8"() -> u8, entry %b0 {
+  %b0 "entry":
     %v0: u8 = const u8 255
     %v1: u8 = const u8 1
     %v2: u8 = add u8 %v0, %v1
     ret u8 %v2
   }
 
-  fn @require_no_overflow() -> u8, id @f1 {
-  entry:
+  fn @f1 "require_no_overflow"() -> u8, entry %b1 {
+  %b1 "entry":
     %v3: u8 = const u8 255
     %v4: u8 = const u8 1
     %v5: tuple<u8, bool> = uadd_chk u8 %v3, %v4
@@ -100,6 +100,87 @@ Wenn Sie beispielsweise 8-Bit `11111111` in 16-Bit zero umwandeln, wird extensio
 Die Konvertierung von Float zu Int schneidet in Richtung Null ab und überprüft dann den Ganzzahlbereich. NaN und Unendlichkeit verursachen eine Falle. Bei der Konvertierung in i8 wird 127,9 zu 127, während 128,0 Traps sind. Bool wird in die Ganzzahl 0 oder 1 konvertiert. i1 mit Vorzeichen kann nicht 1 darstellen und kann daher nicht das Ziel dieser Konvertierung sein.
 
 Durch das Konvertieren einer Adresse in eine Ganzzahl wird der Zeigerzugriff auf diese Ganzzahl nicht wiederhergestellt. Bitte beachten Sie [Zeigergültigkeit](memory-model).
+
+### Geprüfte Formen von Casts und checked-Operationen
+
+Die Prüfung vergleicht den tatsächlichen Operandentyp mit `src_ty` und kontrolliert anschließend die erlaubten Kategorien und Breiten des Opcodes. Auch die Ergebnistypangabe muss zur Definition passen. Es gibt keine impliziten Konvertierungen.
+
+| Opcode | Erlaubte Typen |
+| --- | --- |
+| `zext`, `sext` | Ganzzahlen außer Bool; Zielbreite strikt größer |
+| `zext` (Bool) | Bool zu Ganzzahl 0/1; alle Ganzzahlziele außer vorzeichenbehaftetem `i1`, einschließlich `u1` |
+| `trunc` | Ganzzahlen außer Bool; Zielbreite strikt kleiner |
+| `fext`, `ftrunc` | Gleitkommawerte; Zielbreite strikt größer / kleiner |
+| `itof_s`, `itof_u` | Vorzeichenbehaftete / vorzeichenlose Ganzzahl zu Gleitkomma |
+| `ftoi_s`, `ftoi_u` | Gleitkomma zu vorzeichenbehafteter / vorzeichenloser Ganzzahl |
+| `bitcast` | Gleich breite Ganzzahl-/Gleitkommaskalare oder Datenzeiger zu Datenzeiger |
+| `ptrtoint`, `inttoptr` | Datenzeiger zu Ganzzahl / Ganzzahl zu Datenzeiger |
+
+Ganzzahlerweiterung und -kürzung sind Bitoperationen; die Ganzzahloperanden dürfen unterschiedliche Vorzeicheninterpretationen haben. Bool ist ein eigener logischer Typ: Vorzeichenerweiterung, Kürzung und bitcast zu `i1`/`u1` sind verboten. Casts von Aggregaten und Funktionszeigern werden abgelehnt. Die Prüfung der Zeiger-/Ganzzahlkategorien begründet weder eine gültige Allokation noch Zugriffsrechte. Laufzeitprüfungen für Konvertierungen und das Maschinen-Lowering bleiben eigenständige offene Arbeiten.
+
+Dieses vollständige Rust-Programm gibt zwei gültige Konvertierungen aus und bestätigt, dass das Ersetzen von `zext` durch `fext` abgelehnt wird.
+
+```rust
+use ir::*;
+
+fn main() {
+    let mut builder = ModuleBuilder::new("x86_64-whale-linux", DataLayout::default_64bit_le());
+    let mut function = builder.begin_function("widen", vec![("byte".into(), Type::U8)], Type::Void);
+    function.ret(None);
+    function.finish();
+    let mut module = builder.finish();
+    let function = &mut module.functions[0];
+    function.value_types.extend([(ValueId(1), Type::U32), (ValueId(2), Type::I32)]);
+    function.blocks[0].instructions.extend([
+        Instruction::Cast {
+            dst: ValueId(1), op: CastOp::ZExt,
+            src_ty: Type::U8, src: ValueId(0), dst_ty: Type::U32,
+        },
+        Instruction::Cast {
+            dst: ValueId(2), op: CastOp::Bitcast,
+            src_ty: Type::U32, src: ValueId(1), dst_ty: Type::I32,
+        },
+    ]);
+    verify_module(&module).unwrap();
+    print!("{}", print_module(&module));
+    // An integer source cannot be annotated as a floating widening operation.
+    if let Instruction::Cast { op, .. } = &mut module.functions[0].blocks[0].instructions[0] {
+        *op = CastOp::FExt;
+    }
+    assert!(matches!(verify_module(&module), Err(VerifyError::InvalidCast { .. })));
+}
+```
+
+```text
+module {
+  format_version 3
+  semantics_version 1
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  declare @f0 "widen": whale (u8) -> void, linkage internal
+
+  fn @f0 "widen"(%v0 "byte": u8) -> void, entry %b0 {
+  %b0 "entry":
+    %v1: u32 = zext u8 %v0 to u32
+    %v2: i32 = bitcast u32 %v1 to i32
+    ret void
+  }
+
+}
+```
+
+Die folgenden Anweisungsfragmente sind absichtlich ungültige IR.
+
+```text
+%v1: i32 = ftoi_s f64 %v0 to i32   // Invalid when %v0 is actually Bool.
+%v2: i16 = zext i32 %v3 to i16     // zext cannot narrow.
+%v4: i1 = zext bool %v5 to i1      // Signed i1 cannot represent true as 1.
+```
+
+Ein abweichender tatsächlicher Quelltyp führt zu `OperandTypeMismatch`; ein unerlaubtes Typenpaar zu `InvalidCast` mit Opcode und beiden Typen. Kein Prüfungsfehler fügt Konvertierungen ein oder verändert das Modul.
+
+`sadd_chk`, `ssub_chk` und `smul_chk` verlangen vorzeichenbehaftete Ganzzahlen; `uadd_chk`, `usub_chk` und `umul_chk` vorzeichenlose. Beide Operanden müssen exakt zum Operationstyp `T` passen; das Ergebnis muss `tuple<T, bool>` sein. Extraktion erfordert ein Tupel, einen vorhandenen Feldindex und dessen exakten Typ. Insbesondere wird die Extraktion des Überlauffelds als `i1` abgelehnt. Die obigen Wrap-/Überlaufergebnisse bleiben der Ausführungsvertrag; diese Tests prüfen die Struktur, nicht die Ausführung durch ein implementiertes Backend.
 
 ## Gleitkomma-Arithmetik
 

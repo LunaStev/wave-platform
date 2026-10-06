@@ -34,7 +34,7 @@ Các mô-đun sau được định cấu hình là Rust builder và là đầu r
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
@@ -42,16 +42,16 @@ module {
   declare @f0 "add_u8": whale () -> u8, linkage internal
   declare @f1 "require_no_overflow": whale () -> u8, linkage internal
 
-  fn @add_u8() -> u8, id @f0 {
-  entry:
+  fn @f0 "add_u8"() -> u8, entry %b0 {
+  %b0 "entry":
     %v0: u8 = const u8 255
     %v1: u8 = const u8 1
     %v2: u8 = add u8 %v0, %v1
     ret u8 %v2
   }
 
-  fn @require_no_overflow() -> u8, id @f1 {
-  entry:
+  fn @f1 "require_no_overflow"() -> u8, entry %b1 {
+  %b1 "entry":
     %v3: u8 = const u8 255
     %v4: u8 = const u8 1
     %v5: tuple<u8, bool> = uadd_chk u8 %v3, %v4
@@ -100,6 +100,87 @@ Ví dụ: chuyển đổi 8 bit `11111111` thành 16 bit zero extension trở th
 chuyển đổi float-to-int bỏ phần thập phân theo hướng về 0, sau đó kiểm tra phạm vi số nguyên. NaN và vô cực gây ra bẫy. Khi chuyển đổi sang i8, 127,9 trở thành 127, trong khi 128,0 bẫy. Bool chuyển đổi thành số nguyên 0 hoặc 1. Đã ký i1 không thể đại diện cho 1, vì vậy nó không thể là đích đến của chuyển đổi này.
 
 Việc chuyển đổi một địa chỉ thành một số nguyên không khôi phục quyền truy cập của con trỏ vào số nguyên đó. Vui lòng tham khảo [tính hợp lệ của con trỏ](memory-model).
+
+### Dạng cast và phép toán checked được kiểm tra
+
+Trình kiểm tra so sánh kiểu thực của toán hạng với `src_ty`, rồi kiểm tra loại và độ rộng nguồn/đích mà opcode cho phép. Chú thích kiểu kết quả cũng phải khớp định nghĩa. Không có chuyển đổi ngầm định.
+
+| Opcode | Kiểu được chấp nhận |
+| --- | --- |
+| `zext`, `sext` | Số nguyên khác Bool; độ rộng đích phải lớn hơn |
+| `zext` (Bool) | Bool sang số nguyên 0/1; mọi đích số nguyên trừ `i1` có dấu, bao gồm `u1` |
+| `trunc` | Số nguyên khác Bool; độ rộng đích phải nhỏ hơn |
+| `fext`, `ftrunc` | Số thực; độ rộng đích phải lớn hơn / nhỏ hơn |
+| `itof_s`, `itof_u` | Số nguyên có dấu / không dấu sang số thực |
+| `ftoi_s`, `ftoi_u` | Số thực sang số nguyên có dấu / không dấu |
+| `bitcast` | Giá trị vô hướng nguyên/thực cùng độ rộng, hoặc con trỏ dữ liệu sang con trỏ dữ liệu |
+| `ptrtoint`, `inttoptr` | Con trỏ dữ liệu sang số nguyên / số nguyên sang con trỏ dữ liệu |
+
+Mở rộng và cắt số nguyên là phép toán bit; toán hạng số nguyên có thể khác tính có dấu. Bool là kiểu logic riêng: không cho phép mở rộng dấu, cắt hoặc bitcast sang `i1`/`u1`. Cast của kiểu tổng hợp và con trỏ hàm bị từ chối. Kiểm tra loại con trỏ/số nguyên không xác lập vùng cấp phát hợp lệ hay khôi phục quyền truy cập. Kiểm tra chuyển đổi lúc chạy và lowering sang mã máy vẫn là phần việc riêng chưa hoàn tất.
+
+Chương trình Rust hoàn chỉnh sau in hai chuyển đổi hợp lệ, rồi xác nhận rằng thay `zext` bằng `fext` bị từ chối.
+
+```rust
+use ir::*;
+
+fn main() {
+    let mut builder = ModuleBuilder::new("x86_64-whale-linux", DataLayout::default_64bit_le());
+    let mut function = builder.begin_function("widen", vec![("byte".into(), Type::U8)], Type::Void);
+    function.ret(None);
+    function.finish();
+    let mut module = builder.finish();
+    let function = &mut module.functions[0];
+    function.value_types.extend([(ValueId(1), Type::U32), (ValueId(2), Type::I32)]);
+    function.blocks[0].instructions.extend([
+        Instruction::Cast {
+            dst: ValueId(1), op: CastOp::ZExt,
+            src_ty: Type::U8, src: ValueId(0), dst_ty: Type::U32,
+        },
+        Instruction::Cast {
+            dst: ValueId(2), op: CastOp::Bitcast,
+            src_ty: Type::U32, src: ValueId(1), dst_ty: Type::I32,
+        },
+    ]);
+    verify_module(&module).unwrap();
+    print!("{}", print_module(&module));
+    // An integer source cannot be annotated as a floating widening operation.
+    if let Instruction::Cast { op, .. } = &mut module.functions[0].blocks[0].instructions[0] {
+        *op = CastOp::FExt;
+    }
+    assert!(matches!(verify_module(&module), Err(VerifyError::InvalidCast { .. })));
+}
+```
+
+```text
+module {
+  format_version 3
+  semantics_version 1
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  declare @f0 "widen": whale (u8) -> void, linkage internal
+
+  fn @f0 "widen"(%v0 "byte": u8) -> void, entry %b0 {
+  %b0 "entry":
+    %v1: u32 = zext u8 %v0 to u32
+    %v2: i32 = bitcast u32 %v1 to i32
+    ret void
+  }
+
+}
+```
+
+Các đoạn lệnh sau cố ý là IR không hợp lệ.
+
+```text
+%v1: i32 = ftoi_s f64 %v0 to i32   // Invalid when %v0 is actually Bool.
+%v2: i16 = zext i32 %v3 to i16     // zext cannot narrow.
+%v4: i1 = zext bool %v5 to i1      // Signed i1 cannot represent true as 1.
+```
+
+Kiểu nguồn thực không khớp tạo `OperandTypeMismatch`; cặp kiểu không hợp lệ tạo `InvalidCast` chứa opcode và cả hai kiểu. Lỗi kiểm tra không chèn chuyển đổi hoặc sửa mô-đun.
+
+`sadd_chk`, `ssub_chk`, `smul_chk` yêu cầu số nguyên có dấu; `uadd_chk`, `usub_chk`, `umul_chk` yêu cầu số nguyên không dấu. Cả hai toán hạng phải đúng kiểu phép toán `T`, kết quả phải là `tuple<T, bool>`. Trích xuất yêu cầu tuple, chỉ số trường tồn tại và đúng kiểu trường đó. Đặc biệt, trích xuất trường tràn dưới kiểu `i1` bị từ chối. Kết quả wrap/tràn đã nêu vẫn là hợp đồng thực thi; các kiểm thử này xác nhận cấu trúc, không phải kết quả chạy bằng backend đã được triển khai.
 
 ## số học dấu phẩy động
 

@@ -34,7 +34,7 @@ N 位整数具有 N 值位。无符号整数的范围是 0 到 2^N − 1，有�
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
@@ -42,16 +42,16 @@ module {
   declare @f0 "add_u8": whale () -> u8, linkage internal
   declare @f1 "require_no_overflow": whale () -> u8, linkage internal
 
-  fn @add_u8() -> u8, id @f0 {
-  entry:
+  fn @f0 "add_u8"() -> u8, entry %b0 {
+  %b0 "entry":
     %v0: u8 = const u8 255
     %v1: u8 = const u8 1
     %v2: u8 = add u8 %v0, %v1
     ret u8 %v2
   }
 
-  fn @require_no_overflow() -> u8, id @f1 {
-  entry:
+  fn @f1 "require_no_overflow"() -> u8, entry %b1 {
+  %b1 "entry":
     %v3: u8 = const u8 255
     %v4: u8 = const u8 1
     %v5: tuple<u8, bool> = uadd_chk u8 %v3, %v4
@@ -100,6 +100,87 @@ module {
 float 到 int 的转换会截断为零，然后检查整数范围。 NaN 和无穷大会导致陷阱。当转换为i8时，127.9变成127，而128.0陷入困境。 Bool 转换为整数 0 或 1。有符号 i1 不能表示 1，因此它不能作为此转换的目标。
 
 将地址转换为整数不会恢复对该整数的指针访问。请参阅[指针有效性](memory-model)。
+
+### cast 与 checked 运算的验证形式
+
+验证先检查实际操作数类型是否与 `src_ty` 一致，再检查 opcode 允许的源类型、目标类型和位宽。结果的类型注解也必须与定义一致。不存在隐式转换。
+
+| Opcode | 允许的类型 |
+| --- | --- |
+| `zext`, `sext` | 非 Bool 整数；目标位宽必须更大 |
+| `zext` (Bool) | Bool 到整数 0/1；允许除有符号 `i1` 外的所有整数目标，包括 `u1` |
+| `trunc` | 非 Bool 整数；目标位宽必须更小 |
+| `fext`, `ftrunc` | 浮点数；目标位宽必须更大 / 更小 |
+| `itof_s`, `itof_u` | 有符号 / 无符号整数到浮点数 |
+| `ftoi_s`, `ftoi_u` | 浮点数到有符号 / 无符号整数 |
+| `bitcast` | 相同位宽的整数或浮点标量，或数据指针到数据指针 |
+| `ptrtoint`, `inttoptr` | 数据指针到整数 / 整数到数据指针 |
+
+整数扩展和截断是位运算，因此整数操作数的有符号性可以不同。Bool 是独立的逻辑类型，不允许符号扩展、截断或到 `i1`/`u1` 的 bitcast。聚合类型和函数指针的 cast 会被拒绝。检查指针和整数的类别不会建立有效分配，也不会恢复访问权限。运行时转换检查和机器码 lowering 仍是单独的未完成工作。
+
+下面的完整 Rust 程序输出两个有效转换，并确认将 `zext` 替换为 `fext` 后会被拒绝。
+
+```rust
+use ir::*;
+
+fn main() {
+    let mut builder = ModuleBuilder::new("x86_64-whale-linux", DataLayout::default_64bit_le());
+    let mut function = builder.begin_function("widen", vec![("byte".into(), Type::U8)], Type::Void);
+    function.ret(None);
+    function.finish();
+    let mut module = builder.finish();
+    let function = &mut module.functions[0];
+    function.value_types.extend([(ValueId(1), Type::U32), (ValueId(2), Type::I32)]);
+    function.blocks[0].instructions.extend([
+        Instruction::Cast {
+            dst: ValueId(1), op: CastOp::ZExt,
+            src_ty: Type::U8, src: ValueId(0), dst_ty: Type::U32,
+        },
+        Instruction::Cast {
+            dst: ValueId(2), op: CastOp::Bitcast,
+            src_ty: Type::U32, src: ValueId(1), dst_ty: Type::I32,
+        },
+    ]);
+    verify_module(&module).unwrap();
+    print!("{}", print_module(&module));
+    // An integer source cannot be annotated as a floating widening operation.
+    if let Instruction::Cast { op, .. } = &mut module.functions[0].blocks[0].instructions[0] {
+        *op = CastOp::FExt;
+    }
+    assert!(matches!(verify_module(&module), Err(VerifyError::InvalidCast { .. })));
+}
+```
+
+```text
+module {
+  format_version 3
+  semantics_version 1
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  declare @f0 "widen": whale (u8) -> void, linkage internal
+
+  fn @f0 "widen"(%v0 "byte": u8) -> void, entry %b0 {
+  %b0 "entry":
+    %v1: u32 = zext u8 %v0 to u32
+    %v2: i32 = bitcast u32 %v1 to i32
+    ret void
+  }
+
+}
+```
+
+以下指令片段是故意无效的 IR。
+
+```text
+%v1: i32 = ftoi_s f64 %v0 to i32   // Invalid when %v0 is actually Bool.
+%v2: i16 = zext i32 %v3 to i16     // zext cannot narrow.
+%v4: i1 = zext bool %v5 to i1      // Signed i1 cannot represent true as 1.
+```
+
+实际源类型不匹配会产生 `OperandTypeMismatch`；非法类型组合会产生包含 opcode 和两种类型的 `InvalidCast`。验证错误不会插入转换，也不会修改模块。
+
+`sadd_chk`、`ssub_chk`、`smul_chk` 要求有符号整数；`uadd_chk`、`usub_chk`、`umul_chk` 要求无符号整数。两个操作数都必须与运算类型 `T` 完全相同，结果必须是 `tuple<T, bool>`。提取要求 tuple、存在的字段索引以及该字段的精确类型。尤其不能将溢出字段提取为 `i1`。上文的回绕和溢出结果是执行契约；这些测试验证结构正确性，并不表示已有后端执行这些运算。
 
 ## 浮点运算
 

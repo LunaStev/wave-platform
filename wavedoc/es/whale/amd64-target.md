@@ -35,11 +35,11 @@ whale ir lower program.json --target x86_64-whale-linux
 
 El destino de salida proporciona un diseño de datos little-endian de 64 bits independientemente del host de compilación. Los identificadores desconocidos o combinaciones no admitidas como `aarch64-whale-linux`, `x86_64-whale-windows` fallarán y generarán un error al guiar el destino admitido antes de leer la entrada o reemplazar el archivo de salida. `--no-verify` no deshabilita la verificación de selección de objetivos.
 
-Al ingresar el espacio en blanco AST(`{"globals":[],"functions":[]}`) se generarán los siguientes encabezados y módulos:
+Al ingresar el espacio en blanco AST(`{"format_version":2,"semantics_version":1,"features":[],"program":{"declarations":[],"globals":[],"functions":[]}}`) se generarán los siguientes encabezados y módulos:
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }

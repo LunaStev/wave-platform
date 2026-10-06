@@ -43,7 +43,7 @@ El documento de referencia define las reglas semánticas para Whale. Las funcion
 | --- | --- | --- |
 |ensamblador|Cree ELF64 objeto reubicable a partir del ensamblaje AMD64|Cobertura incompleta de comandos y directivas.|
 |biblioteca de objetos|Composición de objetos, payload sin BSS, validación de objetivos, AMD64 ELF64 serialización e implementación de registro Wave seleccionable para verificar el tamaño.|Los objetos reubicables no son ejecutables.|
-| IR | Construcción, impresión, llamadas directas/indirectas con verificación de firma, reducción de versiones AST, validación de objetivos y diseños tipográficos verificados | AST/typed IR formato 2 y constantes exactas en bits están disponibles; escrito IR el análisis y la emisión de llamadas a máquina siguen no disponibles |
+| IR | Construcción, impresión, llamadas directas/indirectas con verificación de firma, reducción de versiones AST, validación de objetivos y diseños tipográficos verificados | AST format 2, typed IR format 3 y constantes de bits exactos disponibles; el analizador de typed IR y la emisión de llamadas máquina siguen pendientes |
 |enlazador|Interpretación de símbolos, verificación de objetivos de entrada, inspección de ubicación de sección de archivo/memoria|No se admite la aplicación de reubicación completa ni la generación de archivos ejecutables.|
 |Ejecución y depuración|Reglas semánticas definidas en este documento.|IR intérprete, generación de código native completa, inspección en tiempo de ejecución de la memoria de seguimiento, salida DWARF no compatible|
 

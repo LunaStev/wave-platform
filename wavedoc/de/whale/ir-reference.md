@@ -43,15 +43,15 @@ Der Drucker gibt IR aus:
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
 
   declare @f0 "answer": whale () -> i32, linkage internal
 
-  fn @answer() -> i32, id @f0 {
-  entry:
+  fn @f0 "answer"() -> i32, entry %b0 {
+  %b0 "entry":
     %v0: i32 = const i32 40
     %v1: i32 = const i32 2
     %v2: i32 = add i32 %v0, %v1
@@ -126,7 +126,7 @@ fn main() {
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
@@ -134,8 +134,8 @@ module {
   declare @f0 "identity": sysv64 (i32) -> i32, linkage external, link_name "identity_i32"
   declare @f1 "answer": whale () -> i32, linkage internal
 
-  fn @answer() -> i32, id @f1 {
-  entry:
+  fn @f1 "answer"() -> i32, entry %b0 {
+  %b0 "entry":
     %v0: i32 = const i32 42
     %v1: fnptr<sysv64 (i32) -> i32> = function_addr @f0
     %v2: i32 = call sysv64 i32 @f0(%v0)
@@ -172,7 +172,7 @@ Das [vollständige JSON-Beispiel](https://github.com/wavefnd/Whale/blob/master/i
 cargo run --locked --features socket-cli -- ir lower ir/tests/fixtures/ast-v2-calls.json
 ```
 
-Sein [erwarteter IR](https://github.com/wavefnd/Whale/blob/master/ir/tests/fixtures/calls-v2.wir) wird in den Tieferlegungstests überprüft. Funktionsidentität und Linknamen werden an der Grenze IR dargestellt; Ihre Erhaltung durch native Objektgenerierung und -verknüpfung ist immer noch eine separate Arbeit.
+Sein [erwarteter IR](https://github.com/wavefnd/Whale/blob/master/ir/tests/fixtures/calls-v3.wir) wird in den Tieferlegungstests überprüft. Funktionsidentität und Linknamen werden an der Grenze IR dargestellt; Ihre Erhaltung durch native Objektgenerierung und -verknüpfung ist immer noch eine separate Arbeit.
 
 ## Verfügbarkeit von Blöcken und Werten
 
@@ -212,6 +212,48 @@ Ganzzahlen werden als Bitbreite·signedness·String-Zahlen übergeben. Gleitkomm
 
 Sie können die folgenden Skalarverträge AST JSON verwenden. Die Ausgabe typed IR enthält Versionsinformationen, ein vollständiger Roundtrip-Austausch mit dem Textparser wird jedoch noch nicht unterstützt.
 
+
+### Ausgegebene Identitäten und Namen in Anführungszeichen
+
+Typed IR format 3 gibt Funktionen als `@fN`, globale Werte als `@gN`, Werte als `%vN` und Blöcke als `%bN` aus. Funktions- und globale IDs gehören zum Modul; Wert- und Block-IDs zur jeweiligen Funktion. Vorgegebene IDs bleiben einschließlich Nummernlücken erhalten. Namen in Anführungszeichen dienen der Beschreibung, nicht der Referenzauflösung. Jede Funktion nennt ausdrücklich `entry %bN`, unabhängig von der Speicherreihenfolge ihrer Blöcke.
+
+Dieses vollständige Modul wurde über die Rust-IR-API geprüft und ausgegeben. Beide Verzweigungsblöcke heißen `"branch"`; ihre IDs unterscheiden Definitionen und phi-Eingaben.
+
+```text
+module {
+  format_version 3
+  semantics_version 1
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  declare @f0 "choose": whale (bool) -> i32, linkage internal
+
+  fn @f0 "choose"(%v0 "condition": bool) -> i32, entry %b0 {
+  %b0 "entry":
+    cbr bool %v0, label %b1, label %b2
+  %b1 "branch":
+    %v1: i32 = const i32 1
+    br label %b3
+  %b2 "branch":
+    %v2: i32 = const i32 2
+    br label %b3
+  %b3 "join":
+    %v99: i32 = phi i32 [ %v1, %b1 ], [ %v2, %b2 ]
+    ret i32 %v99
+  }
+
+}
+```
+
+`%v0` wird in der Parameterliste definiert. `%b1` und `%b2` bleiben trotz gleicher Namen verschiedene Blöcke; phi bezeichnet die Vorgänger mit IDs. Verzweigungen und switch-Ziele verwenden dieselbe Block-ID-Syntax. Der Drucker nummeriert das ausdrücklich vorgegebene `%v99` nicht neu.
+
+Alle Namen und Zeichenketten stehen in doppelten Anführungszeichen: Ziel, Funktions-, globale, Parameter- und Blocknamen, externe Linknamen, Konstantendeklarationen und trap-Gründe. Druckbares Unicode bleibt erhalten. Die Escape-Sequenzen sind `\"`, `\\`, `\n`, `\r`, `\t`, `\0` und `\u{hex}` mit kleinen Hexadezimalziffern für weitere Steuerzeichen und U+2028/U+2029. Auch Namen mit Zeilenumbruch, Tabulator, Anführungszeichen, Backslash und koreanischem Text bleiben in einem Datensatz.
+
+```text
+"line\ncolumn\tquote\"slash\\한글"
+```
+
+Ausgabedefinitionen im Format 2 müssen auf ausdrückliche IDs, Parameter-IDs, zitierte Namen und eine Eintrittsreferenz umgestellt werden. Nur die typed-IR-Syntax ändert sich; AST JSON format 2 und semantics version 1 bleiben unverändert. Textparser und Round-trip-Leser sind weiterhin nicht verfügbar.
 
 ### Angegebene Version AST JSON
 
@@ -263,15 +305,15 @@ cargo run --locked --features socket-cli -- ir lower program.json
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
 
   declare @f0 "answer": whale () -> u128, linkage internal
 
-  fn @answer() -> u128, id @f0 {
-  entry:
+  fn @f0 "answer"() -> u128, entry %b0 {
+  %b0 "entry":
     %v0: u128 = const u128 340282366920938463463374607431768211455
     ret u128 %v0
   }
@@ -285,7 +327,7 @@ Die Ganzzahl `value` ist eine Dezimalzeichenfolge. Signed Eine Zahl wird nach de
 
 [Das vollständige JSON Schema](https://github.com/wavefnd/Whale/blob/master/ir/schema/ast-v2.schema.json) spezifiziert Formen, erforderliche Felder und Varianten. Zusätzlich kommen Bereichs-/Typprüfungen und die Erkennung doppelter Schlüssel zum Einsatz. Die Teilmenge der Skalarreduzierung umfasst Literale, Variablen/Konstanten, Add/Sub/Mul, Vergleiche, Zuweisungen, If/While, Return und Break/Continue. Funktionsreferenzen, direkte Aufrufe und indirekte Aufrufe werden unterstützt; Aggregatausdrücke werden nicht unterstützt. `Opaque` ist im Schema darstellbar, wird jedoch durch Absenken nicht unterstützt.
 
-Bei der Migration müssen alte reine Programmnutzlasten umschlossen und numerische JSON-Literale durch dezimale Ganzzahlzeichenfolgen oder Gleitkommabitzeichenfolgen ersetzt werden. Alte unversionierte Payloads werden abgelehnt. Nutzlasten von Format 1 müssen in Format 2 migriert werden: Fügen Sie `program.declarations` (ein leeres Array, wenn es nicht verwendet wird) und explizites `convention`/`linkage` in Definitionen hinzu. AST und eingegebene IR Versionsnummern sind unabhängig; beide sind jetzt 2, mit Semantikversion 1.
+Für die Migration wird das alte nackte Program in einen Envelope eingebettet; JSON-Zahlen werden durch dezimale Ganzzahlzeichenketten oder Gleitkommabitzeichenketten ersetzt. Eingaben ohne Version werden abgelehnt. Format 1 muss auf Format 2 umgestellt werden: `program.declarations` (bei Nichtverwendung ein leeres Array) und ausdrückliche `convention`/`linkage` an Definitionen ergänzen. Die Versionen sind unabhängig: AST format 2, typed IR format 3 und semantics version 1.
 
 ### Abgelehnte Eingabe und CLI Wiederherstellung
 

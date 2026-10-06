@@ -35,11 +35,11 @@ whale ir lower program.json --target x86_64-whale-linux
 
 Цель вывода обеспечивает 64-битный формат данных little-endian независимо от хоста сборки. Неизвестные идентификаторы или неподдерживаемые комбинации, такие как `aarch64-whale-linux`, `x86_64-whale-windows`, завершатся ошибкой, указывая поддерживаемую цель перед чтением входных данных или заменой выходного файла. `--no-verify` не отключает проверку выбора цели.
 
-Ввод пробела AST(`{"globals":[],"functions":[]}`) приведет к выводу следующих заголовков и модулей:
+Ввод пробела AST(`{"format_version":2,"semantics_version":1,"features":[],"program":{"declarations":[],"globals":[],"functions":[]}}`) приведет к выводу следующих заголовков и модулей:
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }

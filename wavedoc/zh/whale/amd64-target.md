@@ -35,11 +35,11 @@ whale ir lower program.json --target x86_64-whale-linux
 
 无论构建主机如何，输出目标都提供 64 位 little-endian 数据布局。未知标识符或不受支持的组合（例如 `aarch64-whale-linux`、`x86_64-whale-windows`）将失败，并在读取输入或替换输出文件之前指导受支持的目标出现错误。 `--no-verify` 不禁用目标选择检查。
 
-输入空白AST(`{"globals":[],"functions":[]}`)将输出以下标头和模块：
+输入空白AST(`{"format_version":2,"semantics_version":1,"features":[],"program":{"declarations":[],"globals":[],"functions":[]}}`)将输出以下标头和模块：
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }

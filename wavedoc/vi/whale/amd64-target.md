@@ -35,11 +35,11 @@ whale ir lower program.json --target x86_64-whale-linux
 
 Mục tiêu đầu ra cung cấp bố cục dữ liệu little-endian 64-bit bất kể máy chủ xây dựng. Các mã định danh không xác định hoặc các tổ hợp không được hỗ trợ như `aarch64-whale-linux`, `x86_64-whale-windows` sẽ không thành công kèm theo lỗi hướng dẫn mục tiêu được hỗ trợ trước khi đọc đầu vào hoặc thay thế tệp đầu ra. `--no-verify` không tắt tính năng kiểm tra lựa chọn mục tiêu.
 
-Nhập vào chỗ trống AST(`{"globals":[],"functions":[]}`) sẽ xuất ra các tiêu đề và mô-đun sau:
+Nhập vào chỗ trống AST(`{"format_version":2,"semantics_version":1,"features":[],"program":{"declarations":[],"globals":[],"functions":[]}}`) sẽ xuất ra các tiêu đề và mô-đun sau:
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }

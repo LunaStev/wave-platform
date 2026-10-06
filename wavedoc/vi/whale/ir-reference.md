@@ -43,15 +43,15 @@ Máy in xuất ra IR:
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
 
   declare @f0 "answer": whale () -> i32, linkage internal
 
-  fn @answer() -> i32, id @f0 {
-  entry:
+  fn @f0 "answer"() -> i32, entry %b0 {
+  %b0 "entry":
     %v0: i32 = const i32 40
     %v1: i32 = const i32 2
     %v2: i32 = add i32 %v0, %v1
@@ -126,7 +126,7 @@ fn main() {
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
@@ -134,8 +134,8 @@ module {
   declare @f0 "identity": sysv64 (i32) -> i32, linkage external, link_name "identity_i32"
   declare @f1 "answer": whale () -> i32, linkage internal
 
-  fn @answer() -> i32, id @f1 {
-  entry:
+  fn @f1 "answer"() -> i32, entry %b0 {
+  %b0 "entry":
     %v0: i32 = const i32 42
     %v1: fnptr<sysv64 (i32) -> i32> = function_addr @f0
     %v2: i32 = call sysv64 i32 @f0(%v0)
@@ -172,7 +172,7 @@ Tính chất, loại đối số/kết quả chính xác, sự hiện diện c�
 cargo run --locked --features socket-cli -- ir lower ir/tests/fixtures/ast-v2-calls.json
 ```
 
-[Dự kiến ​​IR](https://github.com/wavefnd/Whale/blob/master/ir/tests/fixtures/calls-v2.wir) của nó đã được kiểm tra trong các thử nghiệm hạ thấp. Danh tính hàm và tên liên kết được thể hiện ở ranh giới IR; bảo tồn chúng thông qua việc tạo và liên kết đối tượng gốc vẫn là công việc riêng biệt.
+[Dự kiến ​​IR](https://github.com/wavefnd/Whale/blob/master/ir/tests/fixtures/calls-v3.wir) của nó đã được kiểm tra trong các thử nghiệm hạ thấp. Danh tính hàm và tên liên kết được thể hiện ở ranh giới IR; bảo tồn chúng thông qua việc tạo và liên kết đối tượng gốc vẫn là công việc riêng biệt.
 
 ## Sự sẵn có của các khối và giá trị
 
@@ -212,6 +212,48 @@ Các số nguyên được truyền dưới dạng độ rộng bit·signedness�
 
 Bạn có thể sử dụng các hợp đồng vô hướng AST JSON bên dưới. Đầu ra typed IR bao gồm thông tin phiên bản nhưng chưa hỗ trợ trao đổi khứ hồi đầy đủ với trình phân tích cú pháp văn bản.
 
+
+### Định danh được in và tên trong dấu ngoặc kép
+
+Typed IR format 3 in hàm dưới dạng `@fN`, giá trị toàn cục là `@gN`, giá trị là `%vN`, khối là `%bN`. ID hàm và toàn cục thuộc mô-đun; ID giá trị và khối thuộc hàm chứa chúng. Các ID được cung cấp được giữ nguyên, kể cả khoảng trống trong số thứ tự. Tên trong ngoặc kép chỉ là chú thích, không dùng để phân giải tham chiếu. Hàm ghi rõ `entry %bN`, độc lập với thứ tự lưu các khối.
+
+Mô-đun hoàn chỉnh sau đã được kiểm tra và in qua API IR Rust. Cả hai khối nhánh đều có tên `"branch"`; ID phân biệt định nghĩa và đầu vào phi.
+
+```text
+module {
+  format_version 3
+  semantics_version 1
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  declare @f0 "choose": whale (bool) -> i32, linkage internal
+
+  fn @f0 "choose"(%v0 "condition": bool) -> i32, entry %b0 {
+  %b0 "entry":
+    cbr bool %v0, label %b1, label %b2
+  %b1 "branch":
+    %v1: i32 = const i32 1
+    br label %b3
+  %b2 "branch":
+    %v2: i32 = const i32 2
+    br label %b3
+  %b3 "join":
+    %v99: i32 = phi i32 [ %v1, %b1 ], [ %v2, %b2 ]
+    ret i32 %v99
+  }
+
+}
+```
+
+`%v0` được định nghĩa trong danh sách tham số. `%b1` và `%b2` vẫn khác nhau dù cùng tên; phi chỉ rõ từng khối tiền nhiệm bằng ID. Nhánh và đích switch dùng cùng cú pháp ID khối. Bộ in không đánh số lại `%v99` được chỉ định rõ ràng.
+
+Mọi trường tên và chuỗi đều dùng dấu ngoặc kép: đích, tên hàm, toàn cục, tham số và khối, tên liên kết ngoài, tên khai báo hằng và lý do trap. Unicode có thể in được giữ nguyên. Các escape là `\"`, `\\`, `\n`, `\r`, `\t`, `\0` và `\u{hex}` với chữ số thập lục phân viết thường cho các ký tự điều khiển khác cùng U+2028/U+2029. Tên chứa xuống dòng, tab, dấu ngoặc kép, dấu gạch chéo ngược và tiếng Hàn vẫn được in trong một bản ghi.
+
+```text
+"line\ncolumn\tquote\"slash\\한글"
+```
+
+Định nghĩa đầu ra format 2 phải chuyển sang ID rõ ràng, ID tham số, tên trong ngoặc kép và tham chiếu khối vào. Chỉ cú pháp typed IR thay đổi; AST JSON format 2 và semantics version 1 vẫn giữ nguyên. Bộ phân tích văn bản và bộ đọc round-trip chưa có.
 
 ### Phiên bản được chỉ định AST JSON
 
@@ -263,15 +305,15 @@ cargo run --locked --features socket-cli -- ir lower program.json
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
 
   declare @f0 "answer": whale () -> u128, linkage internal
 
-  fn @answer() -> u128, id @f0 {
-  entry:
+  fn @f0 "answer"() -> u128, entry %b0 {
+  %b0 "entry":
     %v0: u128 = const u128 340282366920938463463374607431768211455
     ret u128 %v0
   }
@@ -285,7 +327,7 @@ Số nguyên `value` là một chuỗi thập phân. Signed Một số được 
 
 [Lược đồ JSON hoàn chỉnh](https://github.com/wavefnd/Whale/blob/master/ir/schema/ast-v2.schema.json) chỉ định hình dạng, trường bắt buộc và biến thể. Việc kiểm tra phạm vi/loại và phát hiện khóa trùng lặp cũng được áp dụng. Tập hợp con hạ thấp vô hướng bao gồm hằng số, biến/hằng, cộng/phụ/mul, so sánh, gán, if/while, trả về và ngắt/tiếp tục. Hỗ trợ tham chiếu chức năng, gọi trực tiếp và gọi gián tiếp; biểu thức tổng hợp không được hỗ trợ. `Opaque` có ​​thể biểu thị trong lược đồ nhưng không được hỗ trợ bằng cách hạ thấp.
 
-Quá trình di chuyển yêu cầu gói các trọng tải Chương trình trần cũ và thay thế các chữ số JSON bằng chuỗi số nguyên thập phân hoặc chuỗi bit float. Tải trọng cũ chưa được phiên bản sẽ bị từ chối. Tải trọng định dạng 1 phải được di chuyển sang định dạng 2: thêm `program.declarations` (một mảng trống khi không được sử dụng) và `convention`/`linkage` rõ ràng trên các định nghĩa. AST và các số phiên bản IR được nhập là độc lập; cả hai hiện đều là 2, với phiên bản ngữ nghĩa 1.
+Di chuyển yêu cầu bọc Program cũ chưa có envelope và thay số JSON bằng chuỗi số nguyên thập phân hoặc chuỗi bit số thực. Đầu vào không có phiên bản bị từ chối. Format 1 phải chuyển sang format 2, thêm `program.declarations` (mảng rỗng nếu không dùng) và `convention`/`linkage` rõ ràng trong định nghĩa. Các phiên bản độc lập: AST format 2, typed IR format 3 và semantics version 1.
 
 ### Đầu vào bị từ chối và khôi phục CLI
 

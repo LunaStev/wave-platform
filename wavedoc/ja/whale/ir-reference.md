@@ -43,15 +43,15 @@ fn main() {
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
 
   declare @f0 "answer": whale () -> i32, linkage internal
 
-  fn @answer() -> i32, id @f0 {
-  entry:
+  fn @f0 "answer"() -> i32, entry %b0 {
+  %b0 "entry":
     %v0: i32 = const i32 40
     %v1: i32 = const i32 2
     %v2: i32 = add i32 %v0, %v1
@@ -126,7 +126,7 @@ fn main() {
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
@@ -134,8 +134,8 @@ module {
   declare @f0 "identity": sysv64 (i32) -> i32, linkage external, link_name "identity_i32"
   declare @f1 "answer": whale () -> i32, linkage internal
 
-  fn @answer() -> i32, id @f1 {
-  entry:
+  fn @f1 "answer"() -> i32, entry %b0 {
+  %b0 "entry":
     %v0: i32 = const i32 42
     %v1: fnptr<sysv64 (i32) -> i32> = function_addr @f0
     %v2: i32 = call sysv64 i32 @f0(%v0)
@@ -172,7 +172,7 @@ module {
 cargo run --locked --features socket-cli -- ir lower ir/tests/fixtures/ast-v2-calls.json
 ```
 
-その[予想IR](https://github.com/wavefnd/Whale/blob/master/ir/tests/fixtures/calls-v2.wir)は、降下テストでチェックされます。関数 ID とリンク名は IR 境界で表されます。ネイティブ オブジェクトの生成とリンクを通じてそれらを保存することは、依然として別の作業です。
+その[予想IR](https://github.com/wavefnd/Whale/blob/master/ir/tests/fixtures/calls-v3.wir)は、降下テストでチェックされます。関数 ID とリンク名は IR 境界で表されます。ネイティブ オブジェクトの生成とリンクを通じてそれらを保存することは、依然として別の作業です。
 
 ## ブロックと値の利用可能性
 
@@ -212,6 +212,48 @@ ASTとtypedIRはそれぞれのformatversionと共通semanticsversion読む方�
 
 以下のスカラーASTJSON契約が利用可能です。出力される typed IRにはバージョン情報が含まれますが、テキストパーサとの完全な往復交換はまだ未サポートです。
 
+
+### 出力される識別子と引用符付きの名前
+
+typed IR format 3 は関数を `@fN`、グローバルを `@gN`、値を `%vN`、ブロックを `%bN` で出力します。関数・グローバル ID はモジュールに、値・ブロック ID は所属する関数に属します。番号に空きがあっても指定された ID を保存します。引用符付きの名前は説明用であり、参照の解決には使いません。関数はブロックの保存順序とは独立に `entry %bN` を明示します。
+
+次の完全なモジュールは Rust IR API で検証して出力しました。両方の分岐ブロックは `"branch"` という名前ですが、ID が定義と phi 入力を区別します。
+
+```text
+module {
+  format_version 3
+  semantics_version 1
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  declare @f0 "choose": whale (bool) -> i32, linkage internal
+
+  fn @f0 "choose"(%v0 "condition": bool) -> i32, entry %b0 {
+  %b0 "entry":
+    cbr bool %v0, label %b1, label %b2
+  %b1 "branch":
+    %v1: i32 = const i32 1
+    br label %b3
+  %b2 "branch":
+    %v2: i32 = const i32 2
+    br label %b3
+  %b3 "join":
+    %v99: i32 = phi i32 [ %v1, %b1 ], [ %v2, %b2 ]
+    ret i32 %v99
+  }
+
+}
+```
+
+`%v0` はパラメータリストで定義されます。`%b1` と `%b2` は同名でも別のブロックであり、phi は各先行ブロックを ID で指定します。分岐と switch の宛先も同じブロック ID 構文を使います。プリンタは明示した `%v99` の番号を変更しません。
+
+すべての名前・文字列フィールドは二重引用符を使います。対象はターゲット、関数・グローバル・パラメータ・ブロックの名前、外部リンク名、定数宣言名、trap の理由です。表示可能な Unicode はそのまま保存します。エスケープは `\"`、`\\`、`\n`、`\r`、`\t`、`\0` です。その他の制御文字と U+2028/U+2029 は小文字の16進数による `\u{hex}` で表します。改行、タブ、引用符、バックスラッシュ、韓国語を含む名前も1つのレコードとして出力できます。
+
+```text
+"line\ncolumn\tquote\"slash\\한글"
+```
+
+format 2 の出力定義は、明示的 ID、パラメータ ID、引用符付きの名前、エントリ参照へ移行する必要があります。typed IR の構文だけが変わり、AST JSON format 2 と semantics version 1 は維持されます。テキストパーサと round-trip reader はまだ利用できません。
 
 ### バージョンが指定された AST JSON
 
@@ -263,15 +305,15 @@ cargo run --locked --features socket-cli -- ir lower program.json
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
 
   declare @f0 "answer": whale () -> u128, linkage internal
 
-  fn @answer() -> u128, id @f0 {
-  entry:
+  fn @f0 "answer"() -> u128, entry %b0 {
+  %b0 "entry":
     %v0: u128 = const u128 340282366920938463463374607431768211455
     ret u128 %v0
   }
@@ -285,7 +327,7 @@ module {
 
 [完全な JSON スキーマ](https://github.com/wavefnd/Whale/blob/master/ir/schema/ast-v2.schema.json) は、形状、必須フィールド、およびバリアントを指定します。範囲/タイプのチェックと重複キーの検出も追加で適用されます。スカラーを下げるサブセットには、リテラル、変数/定数、加算/減算/乗算、比較、代入、if/while、return、break/Continue が含まれます。関数参照、直接呼び出し、間接呼び出しがサポートされています。集計式はサポートされていません。 `Opaque` はスキーマで表現できますが、引き下げることはサポートされていません。
 
-移行には、古い裸のプログラム ペイロードをラップし、数値 JSON リテラルを 10 進整数文字列または浮動小数点ビット文字列に置き換える必要があります。バージョン管理されていない古いペイロードは拒否されます。形式 1 のペイロードは形式 2 に移行する必要があります。定義に `program.declarations` (未使用の場合は空の配列) を追加し、明示的に `convention`/`linkage` を追加します。 AST と入力された IR のバージョン番号は独立しています。現在は両方とも 2 で、セマンティクス バージョンは 1 です。
+移行には旧 bare Program を envelope で包み、JSON の数値を10進整数文字列または浮動小数点ビット文字列に置き換える必要があります。無バージョン入力は拒否します。format 1 は format 2 に移行し、`program.declarations`（未使用なら空配列）と定義の明示的な `convention`・`linkage` を追加します。AST と typed IR のバージョンは独立しています。AST format は 2、typed IR format は 3、semantics version は 1 です。
 
 ### 拒否される入力とCLI回復
 

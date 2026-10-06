@@ -34,7 +34,7 @@ Los siguientes módulos están configurados como Rust builder y son la salida de
 
 ```text
 module {
-  format_version 2
+  format_version 3
   semantics_version 1
   target "x86_64-whale-linux"
   datalayout { ptr=64, endian=little }
@@ -42,16 +42,16 @@ module {
   declare @f0 "add_u8": whale () -> u8, linkage internal
   declare @f1 "require_no_overflow": whale () -> u8, linkage internal
 
-  fn @add_u8() -> u8, id @f0 {
-  entry:
+  fn @f0 "add_u8"() -> u8, entry %b0 {
+  %b0 "entry":
     %v0: u8 = const u8 255
     %v1: u8 = const u8 1
     %v2: u8 = add u8 %v0, %v1
     ret u8 %v2
   }
 
-  fn @require_no_overflow() -> u8, id @f1 {
-  entry:
+  fn @f1 "require_no_overflow"() -> u8, entry %b1 {
+  %b1 "entry":
     %v3: u8 = const u8 255
     %v4: u8 = const u8 1
     %v5: tuple<u8, bool> = uadd_chk u8 %v3, %v4
@@ -100,6 +100,87 @@ Por ejemplo, convertir `11111111` de 8 bits en zero extension de 16 bits se conv
 La conversión de flotante a int se trunca hacia cero y luego verifica el rango de enteros. NaN y el infinito provocan una trampa. Al convertir a i8, 127,9 se convierte en 127, mientras que 128,0 queda atrapado. Bool se convierte a un número entero 0 o 1. i1 con signo no puede representar 1, por lo que no puede ser el destino de esta conversión.
 
 Convertir una dirección a un número entero no restaura el acceso del puntero a ese número entero. Consulte [validez del puntero](memory-model).
+
+### Formas verificadas de cast y operaciones checked
+
+La verificación compara el tipo real del operando con `src_ty` y después comprueba las categorías y anchuras permitidas por el opcode. La anotación del resultado también debe coincidir con su definición. No hay conversiones implícitas.
+
+| Opcode | Tipos aceptados |
+| --- | --- |
+| `zext`, `sext` | Enteros distintos de Bool; anchura de destino estrictamente mayor |
+| `zext` (Bool) | Conversión de Bool a entero 0/1; todos los destinos enteros excepto `i1` con signo, incluido `u1` |
+| `trunc` | Enteros distintos de Bool; anchura de destino estrictamente menor |
+| `fext`, `ftrunc` | Flotantes; destino estrictamente más ancho / más estrecho |
+| `itof_s`, `itof_u` | Entero con signo / sin signo a flotante |
+| `ftoi_s`, `ftoi_u` | Flotante a entero con signo / sin signo |
+| `bitcast` | Escalares enteros/flotantes de igual anchura, o puntero de datos a puntero de datos |
+| `ptrtoint`, `inttoptr` | Puntero de datos a entero / entero a puntero de datos |
+
+La extensión y el truncamiento enteros son operaciones de bits; los operandos enteros pueden diferir en signo. Bool es un tipo lógico separado: no admite extensión de signo, truncamiento ni bitcast a `i1`/`u1`. Se rechazan casts de agregados y punteros a funciones. Validar las categorías puntero/entero no establece una asignación válida ni recupera permisos. Las comprobaciones de conversión en ejecución y el lowering a código máquina siguen pendientes por separado.
+
+Este programa Rust completo imprime dos conversiones válidas y confirma que sustituir `zext` por `fext` se rechaza.
+
+```rust
+use ir::*;
+
+fn main() {
+    let mut builder = ModuleBuilder::new("x86_64-whale-linux", DataLayout::default_64bit_le());
+    let mut function = builder.begin_function("widen", vec![("byte".into(), Type::U8)], Type::Void);
+    function.ret(None);
+    function.finish();
+    let mut module = builder.finish();
+    let function = &mut module.functions[0];
+    function.value_types.extend([(ValueId(1), Type::U32), (ValueId(2), Type::I32)]);
+    function.blocks[0].instructions.extend([
+        Instruction::Cast {
+            dst: ValueId(1), op: CastOp::ZExt,
+            src_ty: Type::U8, src: ValueId(0), dst_ty: Type::U32,
+        },
+        Instruction::Cast {
+            dst: ValueId(2), op: CastOp::Bitcast,
+            src_ty: Type::U32, src: ValueId(1), dst_ty: Type::I32,
+        },
+    ]);
+    verify_module(&module).unwrap();
+    print!("{}", print_module(&module));
+    // An integer source cannot be annotated as a floating widening operation.
+    if let Instruction::Cast { op, .. } = &mut module.functions[0].blocks[0].instructions[0] {
+        *op = CastOp::FExt;
+    }
+    assert!(matches!(verify_module(&module), Err(VerifyError::InvalidCast { .. })));
+}
+```
+
+```text
+module {
+  format_version 3
+  semantics_version 1
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  declare @f0 "widen": whale (u8) -> void, linkage internal
+
+  fn @f0 "widen"(%v0 "byte": u8) -> void, entry %b0 {
+  %b0 "entry":
+    %v1: u32 = zext u8 %v0 to u32
+    %v2: i32 = bitcast u32 %v1 to i32
+    ret void
+  }
+
+}
+```
+
+Estos fragmentos de instrucciones son IR deliberadamente inválido.
+
+```text
+%v1: i32 = ftoi_s f64 %v0 to i32   // Invalid when %v0 is actually Bool.
+%v2: i16 = zext i32 %v3 to i16     // zext cannot narrow.
+%v4: i1 = zext bool %v5 to i1      // Signed i1 cannot represent true as 1.
+```
+
+Un tipo real de origen distinto produce `OperandTypeMismatch`; un par ilegal produce `InvalidCast` con el opcode y ambos tipos. Ningún error inserta conversiones ni modifica el módulo.
+
+`sadd_chk`, `ssub_chk` y `smul_chk` requieren enteros con signo; `uadd_chk`, `usub_chk` y `umul_chk`, enteros sin signo. Ambos operandos deben coincidir exactamente con el tipo `T`, y el resultado debe ser `tuple<T, bool>`. La extracción exige una tupla, un índice existente y el tipo exacto de ese campo. En particular, se rechaza extraer el desbordamiento como `i1`. Los resultados de wrap/desbordamiento anteriores siguen siendo el contrato de ejecución; las pruebas comprueban la estructura, no la ejecución mediante un backend implementado.
 
 ## aritmética de coma flotante
 
