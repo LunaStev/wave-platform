@@ -4,7 +4,7 @@ defineProps<{ service: string }>()
 
 <template>
   <RouterLink class="platform-identity" to="/" aria-label="Wave Platform">
-    <img src="/img/wave-logo.ico" alt="" />
+    <img src="/img/wave.svg" alt="Wave" />
     <span>Wave</span>
     <small v-if="service">{{ service }}</small>
   </RouterLink>
