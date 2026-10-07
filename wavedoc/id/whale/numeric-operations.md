@@ -30,7 +30,7 @@ Frontend untuk bahasa yang menghentikan eksekusi di overflow harus menggunakan `
 
 ### Wrap dan IR menyatakan pemeriksaan eksplisit
 
-Modul berikut dikonfigurasi sebagai Rust builder dan merupakan keluaran printer saat ini yang telah lolos verifikasi. Pengurai teks dan backend eksekusi belum tersedia.
+Simpan modul lengkap format 3 ini sebagai `integer-operations.wir`; pembaca teks menerimanya dan interpreter skalar dapat menjalankannya.
 
 ```text
 module {
@@ -41,6 +41,10 @@ module {
 
   declare @f0 "add_u8": whale () -> u8, linkage internal
   declare @f1 "require_no_overflow": whale () -> u8, linkage internal
+
+  declare @f2 "minimum_division": whale () -> i8, linkage internal
+  declare @f3 "minimum_remainder": whale () -> i8, linkage internal
+  declare @f4 "negative_shift": whale () -> i8, linkage internal
 
   fn @f0 "add_u8"() -> u8, entry %b0 {
   %b0 "entry":
@@ -61,10 +65,58 @@ module {
     ret u8 %v6
   }
 
+  fn @f2 "minimum_division"() -> i8, entry %b0 {
+  %b0 "entry":
+    %v0: i8 = const i8 -128
+    %v1: i8 = const i8 -1
+    %v2: i8 = sdiv i8 %v0, %v1
+    ret i8 %v2
+  }
+
+  fn @f3 "minimum_remainder"() -> i8, entry %b0 {
+  %b0 "entry":
+    %v0: i8 = const i8 -128
+    %v1: i8 = const i8 -1
+    %v2: i8 = srem i8 %v0, %v1
+    ret i8 %v2
+  }
+
+  fn @f4 "negative_shift"() -> i8, entry %b0 {
+  %b0 "entry":
+    %v0: i8 = const i8 -1
+    %v1: i8 = const i8 -1
+    %v2: i8 = shl i8 %v0, %v1
+    ret i8 %v2
+  }
+
 }
 ```
 
-Berdasarkan kontrak aritmatika, `add_u8` membungkus 256 ke hasil 8-bit 0. `require_no_overflow` mengekstrak hasil yang dibungkus dengan `extract ..., 0` dan tanda luapan Bool dengan `extract ..., 1`. Jika benderanya adalah true, `trap_if` menghentikan eksekusi sebelum pengembalian. Ini adalah hasil yang ditentukan, bukan keluaran dari penerjemah yang diimplementasikan.
+`add_u8` mengembalikan 0, delapan bit rendah dari 256. `minimum_division` menghasilkan −128, `minimum_remainder` menghasilkan 0. `negative_shift` menafsirkan −1 sebagai unsigned count 255 lalu memakai 255 mod 8 = 7. Jalankan dengan ID eksplisit:
+
+```shell
+whale ir run integer-operations.wir --function @f0
+whale ir run integer-operations.wir --function @f2
+whale ir run integer-operations.wir --function @f3
+whale ir run integer-operations.wir --function @f4
+```
+
+```text
+u8 0
+i8 -128
+i8 0
+i8 -128
+```
+
+`require_no_overflow` mengekstrak hasil wrap pada indeks 0 dan flag Bool overflow pada indeks 1. trap_if eksplisit berhenti sebelum return. Perintah berikut keluar dengan status 1 dan menulis diagnosis ke stderr:
+
+```shell
+whale ir run integer-operations.wir --function @f1
+```
+
+```text
+Error: integer-operations.wir: trap at @f1 %b1 instruction 5: "integer overflow" (after 6 steps)
+```
 
 ## Pembagian dan sisanya
 

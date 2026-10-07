@@ -71,3 +71,16 @@ cargo run -p whale --features socket-cli -- ir lower program.json -o program.wir
 `ir lower`는 Whale socket schema의 JSON을 읽고 Whale IR로 변환한 뒤 모듈을 검증합니다. 텍스트 IR은 stdout 또는 `-o` 경로에 출력됩니다. `--target <triple>`은 대상 문자열을 바꾸고 `--no-verify`는 검증을 생략합니다.
 
 `ir lower`를 사용하려면 `socket-cli`로 빌드해야 합니다. Socket JSON 생산자와 Whale은 같은 AST schema version을 사용해야 합니다.
+
+
+## 스칼라 정수 인터프리터
+
+기본 빌드에서 스칼라 정수·Bool IR도 실행합니다. `--function @fN`은 필수이며 `--arg`를 반복해 정확한 10진수 인자를 전달합니다. Bool은 true/false입니다. `--max-steps`는 명령과 terminator 수를 세며 기본값은 1,000,000입니다. run에는 -o나 --no-verify를 사용할 수 없습니다. [IR 참조](ir-reference)의 전체 루프를 `swap-loop.wir`로 저장하세요.
+
+```shell
+whale ir run swap-loop.wir --function @f7 --arg 3 --max-steps 100
+```
+
+```text
+i32 22
+```

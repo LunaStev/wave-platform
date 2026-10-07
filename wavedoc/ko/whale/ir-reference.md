@@ -61,7 +61,7 @@ module {
 }
 ```
 
-`%v0`과 `%v1`은 i32 상수의 정의입니다. `add`가 정의한 `%v2`를 함수의 i32 반환값으로 사용합니다. 반환값을 Bool로 바꾸면 함수 서명에 맞지 않아 검증 오류가 됩니다. 두 피연산자가 상수여도 O0에서는 덧셈 명령을 유지합니다.
+위 출력을 `answer.wir`로 저장하면 텍스트 파서와 CLI에서 읽고 검증할 수 있습니다. 스칼라 정수 실행은 아래에서 설명합니다.
 
 위 출력을 `answer.wir`로 저장하면 텍스트 파서와 CLI에서 읽고 검증할 수 있습니다. IR 실행은 아직 제공하지 않습니다.
 
@@ -198,9 +198,9 @@ Select는 이미 계산된 값 중 하나를 선택합니다. 어느 쪽 입력�
 
 ## 검증과 trap
 
-잘못된 IR은 검증 단계에서 거부합니다. 실행 조건 위반은 정의된 trap으로 처리하며, `undef`와 `poison`은 허용되는 값이 아닙니다. builder 오용, 중복 정의, 두 번째 terminator 추가는 구조적 오류로 반환해야 합니다.
+잘못된 IR은 검증 단계에서 거부합니다. 지원하는 인터프리터 부분집합의 실행 조건 위반은 정의된 trap으로 처리합니다. 파서·검증기는 기존 lowering과의 호환성을 위해 legacy `undef`를 보존하지만 인터프리터는 이를 명시적으로 거부합니다. 미초기화 저장소를 0으로 바꾸지 않으며 초기화 추적은 미완료입니다. builder 오류와 실행 trap은 별개입니다.
 
-trap은 이유·소스 위치·IR ID를 포함하며 이후 실행을 중단합니다. native 실행에서는 프로그램을 종료하고 인터프리터 API에서는 Trap 오류를 반환합니다. 이전 부작용은 보존하지만 버퍼 flush·소멸자 호출·스택 unwinding은 보장하지 않습니다.
+현재 `InterpreterTrap`은 이유·실행 단계 수·`ExecutionSite`를 제공합니다. 위치는 함수 ID, 블록 ID, 0부터 시작하는 명령 인덱스, 선택적인 결과 값 ID입니다. terminator 인덱스는 마지막 명령 다음입니다. CLI 진단에는 입력 파일도 표시합니다. typed IR에는 아직 소스 span이 없으므로 이 위치는 소스 줄 번호가 아닌 IR 위치입니다. trap은 오류를 반환하고 이후 실행을 중단하며 라이브러리는 호스트 프로세스를 종료하지 않습니다.
 
 이 보장은 검증된 IR과 추적 메모리에 적용됩니다. 외부 C·원시 주소·인라인 어셈블리는 별도 계약을 가지며, 그 경계 밖의 위반까지 항상 검출하지는 않습니다. [메모리 모델](memory-model)을 참고하세요.
 
@@ -290,7 +290,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-`verify_module_with_limits`, `ConstExpr::evaluate_with_limits`, `validate_signature_with_limits`, `ModuleBuilder::declare_function_with_limits`에도 한도를 전달할 수 있습니다. 타입은 재귀 clone·비교·진단 전에 반복 순회로 검사하며 상수식은 작업 스택으로 평가합니다. 차용한 Rust 트리의 소유권과 Drop은 호출자에게 있습니다. 임의로 구성한 미검증 트리의 clone/Drop까지 보호하지 않으며, checked 선언 API가 소유한 거부된 서명은 반복적으로 해제합니다. 파서는 기존 lowering과 호환되도록 legacy `undef`를 보존합니다. 초기화 추적·실행 시 trap·포인터 메타데이터·native 실행은 별도 미완료 기능입니다.
+`verify_module_with_limits`, `ConstExpr::evaluate_with_limits`, `validate_signature_with_limits`, `ModuleBuilder::declare_function_with_limits`에도 한도를 전달할 수 있습니다. 타입은 재귀 clone·비교·진단 전에 반복 순회로 검사하며 상수식은 작업 스택으로 평가합니다. 차용한 Rust 트리의 소유권과 Drop은 호출자에게 있습니다. 임의로 구성한 미검증 트리의 clone/Drop까지 보호하지 않으며, checked 선언 API가 소유한 거부된 서명은 반복적으로 해제합니다. 파서는 기존 lowering과 호환되도록 legacy `undef`를 보존합니다. 초기화 추적·메모리 접근 검사·포인터 메타데이터·native 실행은 별도 미완료 기능입니다.
 
 ### 버전이 명시된 AST JSON
 
@@ -392,3 +392,80 @@ Failed to parse socket JSON: unsupported AST format_version 99; expected 2
 ```
 
 명령은 0이 아닌 상태로 종료하며 새 출력을 만들거나 기존 파일을 덮어쓰지 않습니다. 타입 불일치도 출력 게시 전에 실패합니다. `socket-cli` 없이 빌드한 바이너리는 상태 2로 종료하고 `--features socket-cli`가 포함된 복구 명령을 출력합니다.
+
+
+## 스칼라 정수 인터프리터
+
+기본 빌드는 정수·Bool 매개변수와 정수·Bool 또는 void 반환을 가진 검증된 Whale 호출 규약 함수를 실행합니다. 상수·상수 선언, mov, 정수 연산·비교·cast, checked 쌍과 extract, select, phi, 분기, switch, return, trap_if, trap을 지원합니다. 메모리·float·호출·주소·일반 aggregate·legacy `undef`의 실행은 미지원입니다. 먼저 모듈 전체를 검증하며, 선택한 함수는 도달 불가능한 블록까지 모두 이 부분집합에 속해야 합니다. 다른 함수는 검증만 통과하면 됩니다. 메모리를 사용하는 Wave lowering 예제의 실행은 아직 지원하지 않습니다.
+
+`InterpreterOptions::max_steps` 기본값은 1,000,000입니다. phi를 포함한 실행 명령 하나와 terminator 하나가 각각 한 단계를 소비합니다. 한도가 0이면 첫 연산 전에 중단하며 무한 분기 루프는 `InterpreterError::StepLimit`을 반환합니다. `ir_limits`는 검증량을 별도로 제한합니다. 미사용 정수 연산도 실행하고 trap할 수 있습니다. checked overflow는 Bool 결과이며, 명시적인 trap_if가 있어야 trap으로 처리합니다.
+
+다음 전체 모듈을 `swap-loop.wir`로 저장하세요. 종료 블록이 먼저 저장되어 있어도 진입 블록은 명시되어 있습니다. 블록에 진입하면 모든 phi 입력을 이전 블록의 값에서 읽은 뒤 phi 결과를 한꺼번에 기록합니다. 세 번 반복하면 11과 22를 세 번 교환하여 22를 반환합니다.
+
+```text
+module {
+  format_version 3
+  semantics_version 1
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  declare @f7 "swap_loop": whale (u32) -> i32, linkage internal
+
+  fn @f7 "swap_loop"(%v0 "iterations": u32) -> i32, entry %b11 {
+  %b90 "exit":
+    ret i32 %v5
+  %b11 "entry":
+    %v1: i32 = const i32 11
+    %v2: i32 = const i32 22
+    %v3: u32 = const u32 0
+    %v4: u32 = const u32 1
+    br label %b20
+  %b20 "loop":
+    %v5: i32 = phi i32 [ %v1, %b11 ], [ %v6, %b30 ]
+    %v6: i32 = phi i32 [ %v2, %b11 ], [ %v5, %b30 ]
+    %v7: u32 = phi u32 [ %v3, %b11 ], [ %v9, %b30 ]
+    %v8: bool = icmp ult u32 %v7, %v0
+    cbr bool %v8, label %b30, label %b90
+  %b30 "next":
+    %v9: u32 = add u32 %v7, %v4
+    br label %b20
+  }
+
+}
+```
+
+```shell
+whale ir run swap-loop.wir --function @f7 --arg 3 --max-steps 100
+```
+
+```text
+i32 22
+```
+
+Rust API는 값과 단계 수 또는 구조적인 검증·미지원 연산·인자·단계 한도·trap 오류를 반환합니다. 다음 전체 프로그램은 같은 `swap-loop.wir` 파일을 읽습니다.
+
+```rust
+use ir::{interpret_with_options, parse_module, ConstValue, FunctionId,
+         InterpreterError, InterpreterOptions};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let source = std::fs::read_to_string("swap-loop.wir")?;
+    let module = parse_module(&source)?;
+    let options = InterpreterOptions {
+        max_steps: 100,
+        ..InterpreterOptions::default()
+    };
+    let result = interpret_with_options(
+        &module, FunctionId(7), &[ConstValue::U(3)], options,
+    )?;
+    assert_eq!(result.value, Some(ConstValue::I(22)));
+    assert_eq!(result.steps, 32);
+    let stopped = interpret_with_options(
+        &module, FunctionId(7), &[ConstValue::U(3)],
+        InterpreterOptions { max_steps: 0, ..options },
+    );
+    assert!(matches!(stopped, Err(InterpreterError::StepLimit { .. })));
+    println!("i32 22");
+    Ok(())
+}
+```

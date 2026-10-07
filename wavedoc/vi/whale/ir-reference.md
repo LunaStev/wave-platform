@@ -61,7 +61,7 @@ module {
 }
 ```
 
-`%v0` và `%v1` là định nghĩa của hằng số i32. Sử dụng `%v2` được xác định bởi `add` làm giá trị trả về của i32 của hàm. Nếu bạn thay đổi giá trị trả về thành Bool sẽ gây ra lỗi xác minh vì không khớp với chữ ký hàm. Ngay cả khi cả hai toán hạng đều là hằng số, O0 vẫn duy trì lệnh cộng.
+Lưu đầu ra thành `answer.wir` để đọc và xác minh bằng bộ phân tích văn bản hoặc CLI. Việc chạy số nguyên vô hướng được mô tả bên dưới.
 
 Lưu đầu ra thành `answer.wir` để đọc và kiểm tra bằng bộ phân tích văn bản và CLI. Chưa có khả năng thực thi IR.
 
@@ -198,9 +198,9 @@ Select chọn một trong các giá trị đã được tính toán. Nó không 
 
 ## Phòng Kiểm định trap
 
-IR không hợp lệ sẽ bị từ chối trong giai đoạn xác minh. Các vi phạm điều kiện thực thi được xử lý bằng các giá trị được xác định là trap và `undef` và `poison` đều không được chấp nhận. Việc sử dụng sai builder, định nghĩa trùng lặp, bổ sung terminator thứ hai sẽ được trả về dưới dạng lỗi cấu trúc.
+IR sai bị từ chối khi xác minh. Vi phạm điều kiện chạy trong tập con được hỗ trợ tạo trap đã định nghĩa. Bộ phân tích và xác minh vẫn giữ legacy `undef` để tương thích lowering, nhưng trình thông dịch từ chối tường minh; không biến vùng lưu trữ chưa khởi tạo thành số 0. Theo dõi khởi tạo chưa hoàn tất. Lỗi builder tách biệt với trap khi chạy.
 
-trap chứa lý do·vị trí nguồn·IR ID và sau đó dừng thực thi. Chạy native sẽ kết thúc chương trình và trình thông dịch API trả về lỗi Trap. Giữ nguyên các tác dụng phụ trước đó, nhưng không đảm bảo bộ đệm flush·gọi hàm hủy·ngăn xếp unwinding.
+`InterpreterTrap` báo lý do, số bước đã chạy và `ExecutionSite`: ID hàm, ID khối, chỉ số lệnh từ 0 và ID giá trị kết quả tùy chọn. Chỉ số terminator nằm sau các lệnh. CLI cũng nêu tệp đầu vào. Typed IR chưa có span nguồn nên đây là vị trí IR, không phải số dòng nguồn. Trap trả lỗi và dừng chạy tiếp; thư viện không kết thúc tiến trình chủ.
 
 Bảo đảm này áp dụng cho IR đã được xác minh và bộ nhớ theo dõi. Bên ngoài C·địa chỉ thô·tổ hợp nội tuyến có hợp đồng riêng và không phải lúc nào cũng phát hiện ra các vi phạm bên ngoài ranh giới của nó. Vui lòng tham khảo [Mô hình bộ nhớ](memory-model).
 
@@ -290,7 +290,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-Có thể truyền giới hạn vào `verify_module_with_limits`, `ConstExpr::evaluate_with_limits`, `validate_signature_with_limits` và `ModuleBuilder::declare_function_with_limits`. Duyệt kiểu lặp diễn ra trước clone, so sánh và chẩn đoán đệ quy; hằng được tính bằng ngăn xếp công việc. Cây Rust mượn và Drop vẫn thuộc bên gọi. Cây tùy ý chưa kiểm tra vẫn có clone/Drop đệ quy; chữ ký sở hữu bị API khai báo checked từ chối được giải phóng lặp. Bộ đọc giữ legacy `undef` để tương thích lowering hiện có. Theo dõi khởi tạo, trap khi chạy, metadata con trỏ và thực thi native vẫn là các tính năng riêng chưa hoàn thành.
+Có thể truyền giới hạn vào `verify_module_with_limits`, `ConstExpr::evaluate_with_limits`, `validate_signature_with_limits` và `ModuleBuilder::declare_function_with_limits`. Duyệt kiểu lặp diễn ra trước clone, so sánh và chẩn đoán đệ quy; hằng được tính bằng ngăn xếp công việc. Cây Rust mượn và Drop vẫn thuộc bên gọi. Cây tùy ý chưa kiểm tra vẫn có clone/Drop đệ quy; chữ ký sở hữu bị API khai báo checked từ chối được giải phóng lặp. Bộ đọc giữ legacy `undef` để tương thích lowering hiện có. Theo dõi khởi tạo, kiểm tra truy cập bộ nhớ, metadata con trỏ và thực thi native vẫn là các tính năng riêng chưa hoàn thành.
 
 ### Phiên bản được chỉ định AST JSON
 
@@ -392,3 +392,80 @@ Failed to parse socket JSON: unsupported AST format_version 99; expected 2
 ```
 
 Lệnh thoát với trạng thái khác 0 và không tạo đầu ra mới hoặc ghi đè lên các tệp hiện có. Loại không khớp cũng sẽ không thành công trước khi xuất bản đầu ra. Các tệp nhị phân được tạo không có `socket-cli` thoát với trạng thái 2 và xuất ra lệnh khôi phục có chứa `--features socket-cli`.
+
+
+## Trình thông dịch số nguyên vô hướng
+
+Bản dựng mặc định chạy hàm đã xác minh theo quy ước Whale, với tham số số nguyên/Bool và kết quả số nguyên/Bool hoặc void. Hỗ trợ hằng và khai báo hằng, mov, số học và so sánh số nguyên, cast số nguyên, cặp checked và extract, select, phi, nhánh, switch, return, trap_if và trap. Chưa chạy bộ nhớ, float, lời gọi, địa chỉ, aggregate tổng quát và legacy `undef`. Toàn bộ mô-đun được xác minh trước; mọi khối của hàm đã chọn, kể cả khối không thể tới, phải thuộc tập con này. Hàm khác chỉ cần qua xác minh. Chưa chạy được ví dụ lowering Wave dùng bộ nhớ.
+
+`InterpreterOptions::max_steps` mặc định là 1,000,000. Mỗi lệnh được chạy, gồm phi, và mỗi terminator tiêu thụ một bước. Giới hạn 0 dừng trước thao tác đầu tiên; vòng lặp vô hạn trả về `InterpreterError::StepLimit`. `ir_limits` giới hạn xác minh riêng. Phép toán không có nơi dùng vẫn chạy và có thể trap. Overflow checked là kết quả Bool; chỉ trap_if tường minh mới biến nó thành trap.
+
+Lưu mô-đun hoàn chỉnh này thành `swap-loop.wir`. Khối vào được chỉ rõ dù khối thoát được lưu trước. Khi vào khối, mọi đầu vào phi được đọc từ giá trị của khối trước rồi mới ghi đồng thời các kết quả phi. Ba vòng lặp đổi 11 và 22 ba lần và trả về 22.
+
+```text
+module {
+  format_version 3
+  semantics_version 1
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  declare @f7 "swap_loop": whale (u32) -> i32, linkage internal
+
+  fn @f7 "swap_loop"(%v0 "iterations": u32) -> i32, entry %b11 {
+  %b90 "exit":
+    ret i32 %v5
+  %b11 "entry":
+    %v1: i32 = const i32 11
+    %v2: i32 = const i32 22
+    %v3: u32 = const u32 0
+    %v4: u32 = const u32 1
+    br label %b20
+  %b20 "loop":
+    %v5: i32 = phi i32 [ %v1, %b11 ], [ %v6, %b30 ]
+    %v6: i32 = phi i32 [ %v2, %b11 ], [ %v5, %b30 ]
+    %v7: u32 = phi u32 [ %v3, %b11 ], [ %v9, %b30 ]
+    %v8: bool = icmp ult u32 %v7, %v0
+    cbr bool %v8, label %b30, label %b90
+  %b30 "next":
+    %v9: u32 = add u32 %v7, %v4
+    br label %b20
+  }
+
+}
+```
+
+```shell
+whale ir run swap-loop.wir --function @f7 --arg 3 --max-steps 100
+```
+
+```text
+i32 22
+```
+
+API Rust trả về giá trị và số bước hoặc lỗi có cấu trúc về xác minh, thao tác chưa hỗ trợ, đối số, giới hạn bước hay trap. Chương trình hoàn chỉnh đọc cùng tệp `swap-loop.wir`:
+
+```rust
+use ir::{interpret_with_options, parse_module, ConstValue, FunctionId,
+         InterpreterError, InterpreterOptions};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let source = std::fs::read_to_string("swap-loop.wir")?;
+    let module = parse_module(&source)?;
+    let options = InterpreterOptions {
+        max_steps: 100,
+        ..InterpreterOptions::default()
+    };
+    let result = interpret_with_options(
+        &module, FunctionId(7), &[ConstValue::U(3)], options,
+    )?;
+    assert_eq!(result.value, Some(ConstValue::I(22)));
+    assert_eq!(result.steps, 32);
+    let stopped = interpret_with_options(
+        &module, FunctionId(7), &[ConstValue::U(3)],
+        InterpreterOptions { max_steps: 0, ..options },
+    );
+    assert!(matches!(stopped, Err(InterpreterError::StepLimit { .. })));
+    println!("i32 22");
+    Ok(())
+}
+```

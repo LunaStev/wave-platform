@@ -61,7 +61,7 @@ module {
 }
 ```
 
-`%v0` und `%v1` sind Definitionen der Konstante i32. Verwenden Sie `%v2` definiert durch `add` als Rückgabewert von i32 der Funktion. Wenn Sie den Rückgabewert in Bool ändern, führt dies zu einem Überprüfungsfehler, da er nicht mit der Funktionssignatur übereinstimmt. Auch wenn beide Operanden Konstanten sind, behält O0 die Additionsanweisung bei.
+Speichern Sie die Ausgabe als `answer.wir`, um sie mit Textparser oder CLI einzulesen und zu prüfen. Skalare Ganzzahlausführung wird unten erklärt.
 
 Speichern Sie die Ausgabe als `answer.wir`, um sie mit Textleser und CLI einzulesen und zu prüfen. IR-Ausführung ist noch nicht verfügbar.
 
@@ -198,9 +198,9 @@ Select wählt einen der bereits berechneten Werte aus. Die Berechnung beider Ein
 
 ## Verifizierungsabteilung trap
 
-Ungültiges IR wird während der Überprüfungsphase abgelehnt. Verstöße gegen die Ausführungsbedingung werden mit dem definierten trap behandelt, und `undef` und `poison` sind keine akzeptablen Werte. Missbrauch von builder, doppelte Definition, Hinzufügung eines zweiten terminator sollte als struktureller Fehler zurückgegeben werden.
+Fehlerhafte IR wird bei der Prüfung abgelehnt. Verletzungen von Ausführungsbedingungen im unterstützten Teilumfang liefern definierte traps. Parser und Prüfer erhalten legacy `undef` für bestehendes lowering, der Interpreter lehnt es ausdrücklich ab; uninitialisierter Speicher wird nicht zu null. Initialisierungsverfolgung bleibt offen. Builder-Fehler sind von Ausführungs-traps getrennt.
 
-trap enthält den Grund·Quellenort·IR ID und stoppt dann die Ausführung. Durch Ausführen von native wird das Programm beendet und der Interpreter API gibt den Fehler Trap zurück. Behält frühere Nebenwirkungen bei, garantiert jedoch nicht den Puffer flush·Destruktoraufruf·Stack unwinding.
+`InterpreterTrap` meldet Grund, ausgeführte Schritte und `ExecutionSite`: Funktions-ID, Block-ID, Anweisungsindex ab null und optionale Ergebniswert-ID. Der terminator folgt den Anweisungen. Die CLI nennt auch die Eingabedatei. Typed IR trägt noch keine Quell-spans; dies sind IR-Positionen, keine Quellzeilennummern. Ein trap liefert einen Fehler und stoppt nachfolgende Ausführung; die Bibliothek beendet nicht den Hostprozess.
 
 Diese Garantie gilt für verifizierte IR- und Trace-Speicher. Die externe C·Rohadresse·Inline-Assembly verfügt über einen separaten Vertrag und erkennt nicht immer Verstöße außerhalb seiner Grenzen. Bitte beachten Sie [Speichermodell](memory-model).
 
@@ -290,7 +290,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-Limits gelten auch für `verify_module_with_limits`, `ConstExpr::evaluate_with_limits`, `validate_signature_with_limits` und `ModuleBuilder::declare_function_with_limits`. Iterative Typprüfung erfolgt vor rekursivem clone, Vergleich und Diagnose; Konstanten werden mit einem Arbeitsstack ausgewertet. Geliehene Rust-Bäume samt Drop bleiben beim Aufrufer. Beliebige ungeprüfte Bäume haben weiterhin rekursives clone/Drop; die von der checked-Deklarations-API besessene abgelehnte Signatur wird iterativ freigegeben. Legacy `undef` bleibt für bestehendes lowering erhalten. Initialisierungsverfolgung, Laufzeit-traps, Zeigermetadaten und native Ausführung sind getrennte offene Funktionen.
+Limits gelten auch für `verify_module_with_limits`, `ConstExpr::evaluate_with_limits`, `validate_signature_with_limits` und `ModuleBuilder::declare_function_with_limits`. Iterative Typprüfung erfolgt vor rekursivem clone, Vergleich und Diagnose; Konstanten werden mit einem Arbeitsstack ausgewertet. Geliehene Rust-Bäume samt Drop bleiben beim Aufrufer. Beliebige ungeprüfte Bäume haben weiterhin rekursives clone/Drop; die von der checked-Deklarations-API besessene abgelehnte Signatur wird iterativ freigegeben. Legacy `undef` bleibt für bestehendes lowering erhalten. Initialisierungsverfolgung, Speicherzugriffsprüfungen, Zeigermetadaten und native Ausführung sind getrennte offene Funktionen.
 
 ### Angegebene Version AST JSON
 
@@ -392,3 +392,80 @@ Failed to parse socket JSON: unsupported AST format_version 99; expected 2
 ```
 
 Der Befehl wird mit einem Status ungleich Null beendet und erstellt keine neue Ausgabe und überschreibt keine vorhandenen Dateien. Typkonflikte schlagen ebenfalls fehl, bevor die Ausgabe veröffentlicht wird. Ohne `socket-cli` erstellte Binärdateien werden mit Status 2 beendet und geben einen Wiederherstellungsbefehl aus, der `--features socket-cli` enthält.
+
+
+## Interpreter für skalare Ganzzahlen
+
+Der Standardbuild führt verifizierte Funktionen mit Whale-Konvention, Ganzzahl-/Bool-Parametern und Ganzzahl-/Bool- oder void-Rückgabe aus. Unterstützt sind Konstanten und Konstantendeklarationen, mov, Ganzzahlarithmetik und Vergleiche, Ganzzahl-casts, checked-Paare und extract, select, phi, Verzweigungen, switch, return, trap_if und trap. Speicher, float, Aufrufe, Adressen, allgemeine Aggregate und legacy `undef` sind nicht ausführbar. Zuerst wird das gesamte Modul geprüft; alle Blöcke der gewählten Funktion, auch unerreichbare, müssen zum Teilumfang gehören. Andere Funktionen müssen nur die Prüfung bestehen. Wave-lowering-Beispiele mit Speicher sind noch nicht ausführbar.
+
+`InterpreterOptions::max_steps` ist standardmäßig 1,000,000. Jede ausgeführte Anweisung einschließlich phi und jeder terminator verbraucht einen Schritt. Null stoppt vor der ersten Operation; eine Endlosschleife gibt `InterpreterError::StepLimit` zurück. `ir_limits` begrenzt die Prüfung separat. Auch ungenutzte Arithmetik wird ausgeführt und kann trap auslösen. checked overflow liefert Bool; erst ein explizites trap_if löst einen trap aus.
+
+Speichern Sie dieses vollständige Modul als `swap-loop.wir`. Der Einstieg ist explizit, auch wenn der Ausgang zuerst gespeichert ist. Beim Blockeintritt werden alle phi-Eingaben aus dem Vorgänger gelesen, bevor Ergebnisse gemeinsam geschrieben werden. Drei Iterationen tauschen 11 und 22 dreimal und liefern 22.
+
+```text
+module {
+  format_version 3
+  semantics_version 1
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  declare @f7 "swap_loop": whale (u32) -> i32, linkage internal
+
+  fn @f7 "swap_loop"(%v0 "iterations": u32) -> i32, entry %b11 {
+  %b90 "exit":
+    ret i32 %v5
+  %b11 "entry":
+    %v1: i32 = const i32 11
+    %v2: i32 = const i32 22
+    %v3: u32 = const u32 0
+    %v4: u32 = const u32 1
+    br label %b20
+  %b20 "loop":
+    %v5: i32 = phi i32 [ %v1, %b11 ], [ %v6, %b30 ]
+    %v6: i32 = phi i32 [ %v2, %b11 ], [ %v5, %b30 ]
+    %v7: u32 = phi u32 [ %v3, %b11 ], [ %v9, %b30 ]
+    %v8: bool = icmp ult u32 %v7, %v0
+    cbr bool %v8, label %b30, label %b90
+  %b30 "next":
+    %v9: u32 = add u32 %v7, %v4
+    br label %b20
+  }
+
+}
+```
+
+```shell
+whale ir run swap-loop.wir --function @f7 --arg 3 --max-steps 100
+```
+
+```text
+i32 22
+```
+
+Die Rust-API liefert Wert und Schrittzahl oder einen strukturierten Prüfungs-, Unterstützungs-, Argument-, Limit- oder trap-Fehler. Dieses vollständige Programm liest dieselbe Datei `swap-loop.wir`:
+
+```rust
+use ir::{interpret_with_options, parse_module, ConstValue, FunctionId,
+         InterpreterError, InterpreterOptions};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let source = std::fs::read_to_string("swap-loop.wir")?;
+    let module = parse_module(&source)?;
+    let options = InterpreterOptions {
+        max_steps: 100,
+        ..InterpreterOptions::default()
+    };
+    let result = interpret_with_options(
+        &module, FunctionId(7), &[ConstValue::U(3)], options,
+    )?;
+    assert_eq!(result.value, Some(ConstValue::I(22)));
+    assert_eq!(result.steps, 32);
+    let stopped = interpret_with_options(
+        &module, FunctionId(7), &[ConstValue::U(3)],
+        InterpreterOptions { max_steps: 0, ..options },
+    );
+    assert!(matches!(stopped, Err(InterpreterError::StepLimit { .. })));
+    println!("i32 22");
+    Ok(())
+}
+```

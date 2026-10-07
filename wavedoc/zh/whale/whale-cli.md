@@ -71,3 +71,16 @@ cargo run -p whale --features socket-cli -- ir lower program.json -o program.wir
 `ir lower`读取Whalesocketschema的JSON，将其转换为WhaleIR，并验证模块。文本IR输出到路径stdout或`-o`。 `--target <triple>` 替换目标字符串，`--no-verify` 省略验证。
 
 使用 `ir lower` 时须启用 `socket-cli` 构建。Socket JSON 生产者与 Whale 必须使用相同的 AST schema version。
+
+
+## 标量整数解释器
+
+默认构建也执行标量整数与 Bool IR。必须提供 `--function @fN`；重复 `--arg` 传入精确十进制参数，Bool 用 true/false。`--max-steps` 统计指令与 terminator，默认为 1,000,000。run 不接受 -o 或 --no-verify。把 [IR 参考](ir-reference)的完整循环保存为 `swap-loop.wir`：
+
+```shell
+whale ir run swap-loop.wir --function @f7 --arg 3 --max-steps 100
+```
+
+```text
+i32 22
+```

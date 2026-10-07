@@ -30,7 +30,7 @@ Frontends für Sprachen, die die Ausführung bei overflow unterbrechen, müssen 
 
 ### Wrap und IR drücken eine explizite Prüfung aus
 
-Die folgenden Module sind als Rust builder konfiguriert und stellen die aktuelle Druckerausgabe dar, die den Prüfer bestanden hat. Der Textparser und das Ausführungs-Backend sind noch nicht verfügbar.
+Speichern Sie dieses vollständige Format-3-Modul als `integer-operations.wir`; Textreader und skalarer Interpreter akzeptieren es.
 
 ```text
 module {
@@ -41,6 +41,10 @@ module {
 
   declare @f0 "add_u8": whale () -> u8, linkage internal
   declare @f1 "require_no_overflow": whale () -> u8, linkage internal
+
+  declare @f2 "minimum_division": whale () -> i8, linkage internal
+  declare @f3 "minimum_remainder": whale () -> i8, linkage internal
+  declare @f4 "negative_shift": whale () -> i8, linkage internal
 
   fn @f0 "add_u8"() -> u8, entry %b0 {
   %b0 "entry":
@@ -61,10 +65,58 @@ module {
     ret u8 %v6
   }
 
+  fn @f2 "minimum_division"() -> i8, entry %b0 {
+  %b0 "entry":
+    %v0: i8 = const i8 -128
+    %v1: i8 = const i8 -1
+    %v2: i8 = sdiv i8 %v0, %v1
+    ret i8 %v2
+  }
+
+  fn @f3 "minimum_remainder"() -> i8, entry %b0 {
+  %b0 "entry":
+    %v0: i8 = const i8 -128
+    %v1: i8 = const i8 -1
+    %v2: i8 = srem i8 %v0, %v1
+    ret i8 %v2
+  }
+
+  fn @f4 "negative_shift"() -> i8, entry %b0 {
+  %b0 "entry":
+    %v0: i8 = const i8 -1
+    %v1: i8 = const i8 -1
+    %v2: i8 = shl i8 %v0, %v1
+    ret i8 %v2
+  }
+
 }
 ```
 
-Gemäß dem arithmetischen Vertrag umschließt `add_u8` 256 in das 8-Bit-Ergebnis 0. `require_no_overflow` extrahiert das umschlossene Ergebnis mit `extract ..., 0` und das Überlaufflag Bool mit `extract ..., 1`. Wenn das Flag true ist, stoppt `trap_if` die Ausführung vor der Rückkehr. Dies sind die angegebenen Ergebnisse, nicht die Ausgabe eines implementierten Interpreters.
+`add_u8` liefert 0, die unteren acht Bits von 256. `minimum_division` liefert −128 und `minimum_remainder` 0. `negative_shift` interpretiert −1 als unsigned count 255 und verwendet 255 mod 8 = 7. Führen Sie die Funktionen über explizite IDs aus:
+
+```shell
+whale ir run integer-operations.wir --function @f0
+whale ir run integer-operations.wir --function @f2
+whale ir run integer-operations.wir --function @f3
+whale ir run integer-operations.wir --function @f4
+```
+
+```text
+u8 0
+i8 -128
+i8 0
+i8 -128
+```
+
+`require_no_overflow` extrahiert das umgebrochene Ergebnis an Index 0 und das Bool-overflow-Flag an Index 1. Das explizite trap_if stoppt vor der Rückgabe. Der folgende Befehl endet mit Status 1 und schreibt die Diagnose nach stderr:
+
+```shell
+whale ir run integer-operations.wir --function @f1
+```
+
+```text
+Error: integer-operations.wir: trap at @f1 %b1 instruction 5: "integer overflow" (after 6 steps)
+```
 
 ## Division und Rest
 

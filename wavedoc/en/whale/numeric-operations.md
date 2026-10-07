@@ -30,7 +30,7 @@ A frontend that requires overflow to terminate execution must use checked arithm
 
 ### Wrapping and explicitly checked IR
 
-This module was constructed with the Rust builder and accepted by the verifier. It is current printer output; a text parser and execution backend are not yet available.
+Save this complete format 3 module as `integer-operations.wir`; it is accepted by the text reader and executable by the scalar interpreter.
 
 ```text
 module {
@@ -41,6 +41,10 @@ module {
 
   declare @f0 "add_u8": whale () -> u8, linkage internal
   declare @f1 "require_no_overflow": whale () -> u8, linkage internal
+
+  declare @f2 "minimum_division": whale () -> i8, linkage internal
+  declare @f3 "minimum_remainder": whale () -> i8, linkage internal
+  declare @f4 "negative_shift": whale () -> i8, linkage internal
 
   fn @f0 "add_u8"() -> u8, entry %b0 {
   %b0 "entry":
@@ -61,10 +65,58 @@ module {
     ret u8 %v6
   }
 
+  fn @f2 "minimum_division"() -> i8, entry %b0 {
+  %b0 "entry":
+    %v0: i8 = const i8 -128
+    %v1: i8 = const i8 -1
+    %v2: i8 = sdiv i8 %v0, %v1
+    ret i8 %v2
+  }
+
+  fn @f3 "minimum_remainder"() -> i8, entry %b0 {
+  %b0 "entry":
+    %v0: i8 = const i8 -128
+    %v1: i8 = const i8 -1
+    %v2: i8 = srem i8 %v0, %v1
+    ret i8 %v2
+  }
+
+  fn @f4 "negative_shift"() -> i8, entry %b0 {
+  %b0 "entry":
+    %v0: i8 = const i8 -1
+    %v1: i8 = const i8 -1
+    %v2: i8 = shl i8 %v0, %v1
+    ret i8 %v2
+  }
+
 }
 ```
 
-Under the arithmetic contract, `add_u8` returns 0 because 256 wraps to eight bits. `require_no_overflow` separates the wrapped result (`extract ..., 0`) from the Bool overflow flag (`extract ..., 1`). Its explicit `trap_if` stops execution before the return when that flag is true. These are specified execution results, not results from an implemented interpreter.
+`add_u8` returns 0: the low eight bits of 256. `minimum_division` returns −128, `minimum_remainder` returns 0, and `negative_shift` interprets −1 as the unsigned count 255, then uses 255 mod 8 = 7. Execute the functions by explicit ID:
+
+```shell
+whale ir run integer-operations.wir --function @f0
+whale ir run integer-operations.wir --function @f2
+whale ir run integer-operations.wir --function @f3
+whale ir run integer-operations.wir --function @f4
+```
+
+```text
+u8 0
+i8 -128
+i8 0
+i8 -128
+```
+
+`require_no_overflow` extracts the wrapped result at index 0 and the Bool overflow flag at index 1. Its explicit trap_if stops before return. The following command exits with status 1 and writes the diagnostic to stderr:
+
+```shell
+whale ir run integer-operations.wir --function @f1
+```
+
+```text
+Error: integer-operations.wir: trap at @f1 %b1 instruction 5: "integer overflow" (after 6 steps)
+```
 
 ## Division and remainder
 
