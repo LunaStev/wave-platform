@@ -63,7 +63,7 @@ module {
 
 `%v0`과 `%v1`은 i32 상수의 정의입니다. `add`가 정의한 `%v2`를 함수의 i32 반환값으로 사용합니다. 반환값을 Bool로 바꾸면 함수 서명에 맞지 않아 검증 오류가 됩니다. 두 피연산자가 상수여도 O0에서는 덧셈 명령을 유지합니다.
 
-이 코드는 실제 프린터 출력이며 텍스트 파서에 전달할 입력 파일이 아닙니다. 텍스트 파싱과 IR 실행은 아직 지원하지 않으며, 현재는 Rust builder로 이 모듈을 구성할 수 있습니다.
+위 출력을 `answer.wir`로 저장하면 텍스트 파서와 CLI에서 읽고 검증할 수 있습니다. IR 실행은 아직 제공하지 않습니다.
 
 ## 타입
 
@@ -210,8 +210,7 @@ AST와 typed IR은 각각의 format version과 공통 semantics version을 사�
 
 정수는 비트 폭·signedness·문자열 숫자로 전달합니다. 부동소수점 상수는 폭과 정확한 비트열로 전달합니다. 텍스트 IR의 round-trip은 이름·ID·타입·상수·순서·속성·메타데이터를 보존해야 합니다. 공백과 주석 배치는 보존 대상이 아닙니다.
 
-아래 스칼라 AST JSON 계약을 사용할 수 있습니다. 출력되는 typed IR에는 버전 정보가 포함되지만 텍스트 파서와 완전한 왕복 교환은 아직 미지원입니다.
-
+아래 AST JSON 계약과 typed IR 형식 3의 읽기·검증·왕복 출력을 사용할 수 있습니다.
 
 ### 출력 식별자와 인용된 이름
 
@@ -253,7 +252,45 @@ module {
 "line\ncolumn\tquote\"slash\\한글"
 ```
 
-format 2 출력 정의는 명시적 ID, 매개변수 ID, 인용된 이름, 진입 블록 참조로 마이그레이션해야 합니다. typed IR 문법만 변경하며 AST JSON format 2와 semantics version 1은 유지합니다. 텍스트 파서와 round-trip reader는 아직 제공하지 않습니다.
+형식 2의 출력은 명시적 ID, 매개변수 ID, 인용된 이름, 진입 블록 참조로 직접 마이그레이션해야 합니다. 파서는 형식 3과 semantics version 1만 받으며 형식 2를 자동 변환하지 않습니다. AST JSON 형식 2는 별도 계약입니다.
+
+### 텍스트 IR 읽기와 검증
+
+`ir::parse_module`은 typed IR을 읽은 뒤 검증하여 `Module`을 반환합니다. 현재 프린터의 스칼라·제어 흐름·메모리·직접/간접 호출·상수식 구문을 받습니다. ID·이름·타입·정확한 정수와 float 비트·상수식 트리와 평가 결과·블록 순서·진입 블록·정렬·서명·link_name을 보존합니다. 공백과 `//` 줄 주석은 표준 출력으로 정리합니다. 위의 전체 IR을 `answer.wir`로 저장하고 기본 빌드에서 실행하세요.
+
+```sh
+cargo run --locked -- ir verify answer.wir
+cargo run --locked -- ir print answer.wir -o canonical.wir
+```
+
+알 수 없는 버전·필드·명령·이스케이프, 범위를 벗어난 리터럴, 중복 ID, 상충하는 타입 표기, 뒤따르는 입력은 거부합니다. `ParseError`는 바이트 위치와 1부터 시작하는 행·Unicode scalar 기준 열을 제공합니다. 검증 오류는 가능한 경우 해당 함수나 전역 선언에 연결됩니다. `print`도 검증을 수행하며 실패하면 기존 출력 파일을 보존합니다. 새 구문이나 의미는 해당 format/semantics version을 변경해야 하며 알 수 없는 버전은 오류입니다.
+
+### 검증 자원 한도
+
+`IrLimits` 기본값은 입력 8 MiB, 토큰 1,000,000개, 순회 노드 1,000,000개, 타입과 상수식 깊이 각각 128입니다. 루트 깊이는 0이며, 자식마다 1 증가합니다. 깊이는 낮추거나 `MAX_IR_NESTING`인 256까지 높일 수 있습니다. 깊이·작업량 초과는 `LimitError`, `VerifyError::ResourceLimit`, `ConstEvalError::ResourceLimit` 또는 `CallError::ResourceLimit`으로 반환합니다. 노드 한도는 타입 표기와 상수식 노드를 포함한 각 입력 경계의 순회량이며 실행 시간 한도가 아닙니다.
+
+```rust
+use ir::{parse_module_with_limits, print_module, IrLimits};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let source = std::fs::read_to_string("answer.wir")?;
+    let limits = IrLimits {
+        max_type_depth: 32,
+        max_const_depth: 32,
+        max_nodes: 10_000,
+        ..IrLimits::default()
+    };
+    let module = parse_module_with_limits(&source, limits)?;
+    let canonical = print_module(&module);
+    let reread = parse_module_with_limits(&canonical, limits)?;
+    assert_eq!(print_module(&reread), canonical);
+    let invalid = source.replacen("format_version 3", "format_version 99", 1);
+    assert!(parse_module_with_limits(&invalid, limits).is_err());
+    Ok(())
+}
+```
+
+`verify_module_with_limits`, `ConstExpr::evaluate_with_limits`, `validate_signature_with_limits`, `ModuleBuilder::declare_function_with_limits`에도 한도를 전달할 수 있습니다. 타입은 재귀 clone·비교·진단 전에 반복 순회로 검사하며 상수식은 작업 스택으로 평가합니다. 차용한 Rust 트리의 소유권과 Drop은 호출자에게 있습니다. 임의로 구성한 미검증 트리의 clone/Drop까지 보호하지 않으며, checked 선언 API가 소유한 거부된 서명은 반복적으로 해제합니다. 파서는 기존 lowering과 호환되도록 legacy `undef`를 보존합니다. 초기화 추적·실행 시 trap·포인터 메타데이터·native 실행은 별도 미완료 기능입니다.
 
 ### 버전이 명시된 AST JSON
 

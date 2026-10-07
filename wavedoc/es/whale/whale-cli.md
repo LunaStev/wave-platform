@@ -50,9 +50,18 @@ whale object input.bin -o output.o
 
 El comando `object` coloca bytes sin procesar en una sección ELF64 `.text` y agrega un símbolo `start` global en el desplazamiento 0. Envuelve el código de máquina sin procesar en un archivo de objeto ELF.
 
+## Verificación e impresión de IR textual
+
+La compilación predeterminada lee y verifica typed IR format 3. Guarde el ejemplo completo de la [referencia IR](ir-reference) como `answer.wir`. `print` verifica antes de imprimir el formato canónico y conserva el archivo existente si falla. No ejecuta IR ni genera código native.
+
+```shell
+whale ir verify answer.wir
+whale ir print answer.wir -o canonical.wir
+```
+
 ## Opcional IR socket
 
-El comando `ir` solo se incluye cuando Whale se construye con la función `socket-cli`.
+AST JSON `ir lower` requiere la feature `socket-cli`. `verify` y `print` de IR textual no la requieren.
 
 ```shell
 cargo run -p whale --features socket-cli -- ir lower program.json
@@ -61,4 +70,4 @@ cargo run -p whale --features socket-cli -- ir lower program.json -o program.wir
 
 `ir lower` lee JSON de Whale socket schema, lo convierte a Whale IR y verifica el módulo. El texto IR se envía a la ruta stdout o `-o`. `--target <triple>` reemplaza la cadena de destino y `--no-verify` omite la validación.
 
-Para utilizar el comando IR, Whale debe estar integrado con la función `socket-cli`. Socket JSON productores y Whale deben utilizar el mismo socket schema version.
+Compile con `socket-cli` para usar `ir lower`. Los productores de Socket JSON y Whale deben usar la misma AST schema version.

@@ -63,7 +63,7 @@ module {
 
 `%v0` dan `%v1` adalah definisi konstanta i32. Gunakan `%v2` yang didefinisikan oleh `add` sebagai nilai kembalian i32 dari fungsi tersebut. Jika Anda mengubah nilai kembalian menjadi Bool, ini akan menyebabkan kesalahan verifikasi karena tidak cocok dengan tanda tangan fungsi. Meskipun kedua operan adalah konstanta, O0 mempertahankan instruksi penjumlahan.
 
-Kode ini adalah keluaran printer sebenarnya, bukan file masukan untuk diteruskan ke pengurai teks. Penguraian teks dan eksekusi IR belum didukung, saat ini modul ini dapat dikonfigurasi sebagai Rust builder.
+Simpan keluaran sebagai `answer.wir` untuk dibaca dan diverifikasi dengan parser teks dan CLI. Eksekusi IR belum tersedia.
 
 ## mengetik
 
@@ -210,8 +210,7 @@ AST dan typed IR masing-masing menggunakan format version dan semantics version 
 
 Bilangan bulat diteruskan sebagai nomor string lebar bit·signedness·. Konstanta floating point dilewatkan sebagai string bit lebar dan tepat. Teks round-trip di IR harus mempertahankan nama·ID·tipe·konstan·urutan·properti·metadata. Spasi dan penempatan komentar tidak dapat dipertahankan.
 
-Anda dapat menggunakan kontrak skalar AST JSON di bawah. Keluaran typed IR menyertakan informasi versi, namun pertukaran bolak-balik penuh dengan parser teks belum didukung.
-
+Kontrak AST JSON berikut serta pembacaan, verifikasi dan pencetakan bolak-balik typed IR format 3 tersedia.
 
 ### Identitas tercetak dan nama dalam tanda kutip
 
@@ -253,7 +252,45 @@ Semua bidang nama dan string memakai tanda kutip ganda: target, nama fungsi, glo
 "line\ncolumn\tquote\"slash\\한글"
 ```
 
-Definisi keluaran format 2 harus dimigrasikan ke ID eksplisit, ID parameter, nama dalam tanda kutip dan referensi blok masuk. Hanya sintaks typed IR yang berubah; AST JSON format 2 dan semantics version 1 tetap sama. Parser teks dan pembaca round-trip masih belum tersedia.
+Keluaran format 2 harus dimigrasikan secara manual ke ID eksplisit, ID parameter, nama bertanda kutip dan referensi masuk. Pembaca hanya menerima format 3 dengan semantics version 1 dan tidak mengonversi format 2 otomatis. AST JSON format 2 merupakan kontrak terpisah.
+
+### Membaca dan memverifikasi IR teks
+
+`ir::parse_module` membaca typed IR, memverifikasinya dan mengembalikan `Module`. Sintaks printer saat ini untuk skalar, alur kontrol, memori, panggilan langsung/tidak langsung dan ekspresi konstan diterima. ID, nama, tipe, integer dan bit float yang tepat, pohon ekspresi dan hasil evaluasi, urutan blok, masuk, alignment, signature dan link_name dipertahankan. Spasi dan komentar baris `//` menjadi keluaran kanonis. Simpan IR lengkap di atas sebagai `answer.wir` lalu jalankan perintah ini pada build bawaan.
+
+```sh
+cargo run --locked -- ir verify answer.wir
+cargo run --locked -- ir print answer.wir -o canonical.wir
+```
+
+Versi, field, instruksi dan escape tidak dikenal, literal di luar rentang, ID duplikat, anotasi tipe bertentangan dan masukan tambahan ditolak. `ParseError` memberikan offset byte dan baris/kolom Unicode scalar mulai 1. Kesalahan verifikasi dikaitkan dengan fungsi atau deklarasi global terkait jika tersedia. `print` juga memverifikasi dan mempertahankan keluaran yang ada jika gagal. Sintaks atau semantik baru memerlukan perubahan format/semantics version terkait; versi tidak dikenal adalah kesalahan.
+
+### Batas sumber daya verifikasi
+
+Nilai bawaan `IrLimits` adalah input 8 MiB, 1,000,000 token, 1,000,000 node traversal, serta kedalaman tipe dan ekspresi masing-masing 128. Kedalaman akar 0 dan tiap anak menambah 1. Kedalaman dapat diturunkan atau dinaikkan hingga `MAX_IR_NESTING`, 256. Kelebihan mengembalikan `LimitError`, `VerifyError::ResourceLimit`, `ConstEvalError::ResourceLimit` atau `CallError::ResourceLimit`. Node menghitung traversal pada tiap batas input, termasuk anotasi tipe dan ekspresi, bukan waktu berlalu.
+
+```rust
+use ir::{parse_module_with_limits, print_module, IrLimits};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let source = std::fs::read_to_string("answer.wir")?;
+    let limits = IrLimits {
+        max_type_depth: 32,
+        max_const_depth: 32,
+        max_nodes: 10_000,
+        ..IrLimits::default()
+    };
+    let module = parse_module_with_limits(&source, limits)?;
+    let canonical = print_module(&module);
+    let reread = parse_module_with_limits(&canonical, limits)?;
+    assert_eq!(print_module(&reread), canonical);
+    let invalid = source.replacen("format_version 3", "format_version 99", 1);
+    assert!(parse_module_with_limits(&invalid, limits).is_err());
+    Ok(())
+}
+```
+
+Batas juga dapat diberikan kepada `verify_module_with_limits`, `ConstExpr::evaluate_with_limits`, `validate_signature_with_limits` dan `ModuleBuilder::declare_function_with_limits`. Traversal tipe iteratif mendahului clone, perbandingan dan diagnostik rekursif; konstanta dievaluasi dengan stack kerja. Pohon Rust yang dipinjam beserta Drop tetap dimiliki pemanggil. Pohon sembarang yang belum diverifikasi masih memiliki clone/Drop rekursif; signature milik API deklarasi checked yang ditolak dibuang iteratif. Pembaca mempertahankan legacy `undef` untuk kompatibilitas lowering yang ada. Pelacakan inisialisasi, trap runtime, metadata pointer dan eksekusi native tetap merupakan fitur terpisah yang belum selesai.
 
 ### Versi yang ditentukan AST JSON
 

@@ -50,9 +50,18 @@ whale object input.bin -o output.o
 
 Der Befehl `object` platziert Rohbytes in einem ELF64-Abschnitt `.text` und fügt ein globales `start`-Symbol am Offset 0 hinzu. Er umschließt rohen Maschinencode in einer ELF-Objektdatei.
 
+## Text-IR prüfen und ausgeben
+
+Der Standardbuild liest und prüft typed IR format 3. Speichern Sie das vollständige Beispiel aus der [IR-Referenz](ir-reference) als `answer.wir`. `print` prüft vor der kanonischen Ausgabe und bewahrt bei Fehlern eine bestehende Datei. Es führt IR nicht aus und erzeugt keinen nativen Code.
+
+```shell
+whale ir verify answer.wir
+whale ir print answer.wir -o canonical.wir
+```
+
 ## Optional IR socket
 
-Der Befehl `ir` ist nur enthalten, wenn Whale mit der Funktion `socket-cli` erstellt wird.
+AST JSON mit `ir lower` benötigt die Feature `socket-cli`. Text-IR mit `verify` und `print` benötigt sie nicht.
 
 ```shell
 cargo run -p whale --features socket-cli -- ir lower program.json
@@ -61,4 +70,4 @@ cargo run -p whale --features socket-cli -- ir lower program.json -o program.wir
 
 `ir lower` liest JSON von Whale socket schema, wandelt es in Whale IR um und überprüft das Modul. Der Text IR wird in den Pfad stdout bzw. `-o` ausgegeben. `--target <triple>` ersetzt die Zielzeichenfolge und `--no-verify` lässt die Validierung aus.
 
-Um den Befehl IR verwenden zu können, muss Whale mit der Funktion `socket-cli` erstellt werden. Socket JSON Hersteller und Whale müssen dasselbe socket schema version verwenden.
+Bauen Sie mit `socket-cli`, um `ir lower` zu nutzen. Socket-JSON-Produzenten und Whale müssen dieselbe AST schema version verwenden.

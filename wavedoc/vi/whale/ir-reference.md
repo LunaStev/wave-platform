@@ -63,7 +63,7 @@ module {
 
 `%v0` và `%v1` là định nghĩa của hằng số i32. Sử dụng `%v2` được xác định bởi `add` làm giá trị trả về của i32 của hàm. Nếu bạn thay đổi giá trị trả về thành Bool sẽ gây ra lỗi xác minh vì không khớp với chữ ký hàm. Ngay cả khi cả hai toán hạng đều là hằng số, O0 vẫn duy trì lệnh cộng.
 
-Mã này là đầu ra thực tế của máy in, không phải tệp đầu vào để chuyển tới trình phân tích cú pháp văn bản. Phân tích cú pháp văn bản và thực thi IR chưa được hỗ trợ, hiện tại mô-đun này có thể được định cấu hình là Rust builder.
+Lưu đầu ra thành `answer.wir` để đọc và kiểm tra bằng bộ phân tích văn bản và CLI. Chưa có khả năng thực thi IR.
 
 ## loại
 
@@ -210,8 +210,7 @@ AST và typed IR sử dụng format version tương ứng và semantics version 
 
 Các số nguyên được truyền dưới dạng độ rộng bit·signedness·số chuỗi. Các hằng số dấu phẩy động được truyền dưới dạng chuỗi bit có chiều rộng và chính xác. Văn bản round-trip trong IR phải giữ nguyên tên·ID·loại·hằng·chuỗi·thuộc tính·siêu dữ liệu. Không gian và vị trí bình luận không được bảo tồn.
 
-Bạn có thể sử dụng các hợp đồng vô hướng AST JSON bên dưới. Đầu ra typed IR bao gồm thông tin phiên bản nhưng chưa hỗ trợ trao đổi khứ hồi đầy đủ với trình phân tích cú pháp văn bản.
-
+Có thể dùng hợp đồng AST JSON bên dưới cùng việc đọc, kiểm tra và in khứ hồi typed IR format 3.
 
 ### Định danh được in và tên trong dấu ngoặc kép
 
@@ -253,7 +252,45 @@ Mọi trường tên và chuỗi đều dùng dấu ngoặc kép: đích, tên h
 "line\ncolumn\tquote\"slash\\한글"
 ```
 
-Định nghĩa đầu ra format 2 phải chuyển sang ID rõ ràng, ID tham số, tên trong ngoặc kép và tham chiếu khối vào. Chỉ cú pháp typed IR thay đổi; AST JSON format 2 và semantics version 1 vẫn giữ nguyên. Bộ phân tích văn bản và bộ đọc round-trip chưa có.
+Đầu ra format 2 phải chuyển thủ công sang ID tường minh, ID tham số, tên trong ngoặc kép và tham chiếu khối vào. Bộ đọc chỉ nhận format 3 với semantics version 1 và không tự chuyển format 2. AST JSON format 2 có hợp đồng riêng.
+
+### Đọc và kiểm tra IR văn bản
+
+`ir::parse_module` đọc typed IR, kiểm tra rồi trả về `Module`. Nó nhận cú pháp hiện tại của bộ in cho vô hướng, luồng điều khiển, bộ nhớ, lời gọi trực tiếp/gián tiếp và biểu thức hằng. ID, tên, kiểu, số nguyên và bit float chính xác, cây biểu thức và kết quả tính, thứ tự khối, khối vào, căn chỉnh, chữ ký và link_name được giữ nguyên. Khoảng trắng và chú thích dòng `//` được chuẩn hóa. Lưu toàn bộ IR ở trên thành `answer.wir` và chạy các lệnh sau trong bản dựng mặc định.
+
+```sh
+cargo run --locked -- ir verify answer.wir
+cargo run --locked -- ir print answer.wir -o canonical.wir
+```
+
+Từ chối phiên bản, trường, lệnh và escape không biết, literal vượt phạm vi, ID trùng, chú thích kiểu mâu thuẫn và đầu vào dư. `ParseError` cung cấp độ lệch byte và dòng/cột Unicode scalar bắt đầu từ 1. Lỗi kiểm tra được gắn với hàm hoặc khai báo toàn cục liên quan khi có thể. `print` cũng kiểm tra và giữ đầu ra cũ khi thất bại. Cú pháp hoặc ngữ nghĩa mới cần đổi format/semantics version tương ứng; phiên bản không biết là lỗi.
+
+### Giới hạn tài nguyên kiểm tra
+
+Mặc định `IrLimits` cho phép đầu vào 8 MiB, 1,000,000 token, 1,000,000 nút duyệt, độ sâu kiểu và biểu thức mỗi loại 128. Gốc có độ sâu 0, mỗi con tăng 1. Có thể giảm độ sâu hoặc tăng tới `MAX_IR_NESTING`, 256. Vượt giới hạn trả về `LimitError`, `VerifyError::ResourceLimit`, `ConstEvalError::ResourceLimit` hoặc `CallError::ResourceLimit`. Số nút đếm việc duyệt tại mỗi ranh giới đầu vào, gồm chú thích kiểu và biểu thức, không phải thời gian trôi qua.
+
+```rust
+use ir::{parse_module_with_limits, print_module, IrLimits};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let source = std::fs::read_to_string("answer.wir")?;
+    let limits = IrLimits {
+        max_type_depth: 32,
+        max_const_depth: 32,
+        max_nodes: 10_000,
+        ..IrLimits::default()
+    };
+    let module = parse_module_with_limits(&source, limits)?;
+    let canonical = print_module(&module);
+    let reread = parse_module_with_limits(&canonical, limits)?;
+    assert_eq!(print_module(&reread), canonical);
+    let invalid = source.replacen("format_version 3", "format_version 99", 1);
+    assert!(parse_module_with_limits(&invalid, limits).is_err());
+    Ok(())
+}
+```
+
+Có thể truyền giới hạn vào `verify_module_with_limits`, `ConstExpr::evaluate_with_limits`, `validate_signature_with_limits` và `ModuleBuilder::declare_function_with_limits`. Duyệt kiểu lặp diễn ra trước clone, so sánh và chẩn đoán đệ quy; hằng được tính bằng ngăn xếp công việc. Cây Rust mượn và Drop vẫn thuộc bên gọi. Cây tùy ý chưa kiểm tra vẫn có clone/Drop đệ quy; chữ ký sở hữu bị API khai báo checked từ chối được giải phóng lặp. Bộ đọc giữ legacy `undef` để tương thích lowering hiện có. Theo dõi khởi tạo, trap khi chạy, metadata con trỏ và thực thi native vẫn là các tính năng riêng chưa hoàn thành.
 
 ### Phiên bản được chỉ định AST JSON
 

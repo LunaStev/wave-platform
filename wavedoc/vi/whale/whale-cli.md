@@ -50,9 +50,18 @@ whale object input.bin -o output.o
 
 Lệnh `object` đặt các byte thô vào phần ELF64 `.text` và thêm biểu tượng `start` toàn cầu ở độ lệch 0. Lệnh này bao bọc mã máy thô trong tệp đối tượng ELF.
 
+## Kiểm tra và in IR văn bản
+
+Bản dựng mặc định đọc và kiểm tra typed IR format 3. Lưu ví dụ đầy đủ trong [tham chiếu IR](ir-reference) thành `answer.wir`. `print` kiểm tra trước khi in dạng chuẩn và giữ tệp cũ khi thất bại. Nó không thực thi IR hay sinh mã native.
+
+```shell
+whale ir verify answer.wir
+whale ir print answer.wir -o canonical.wir
+```
+
 ## Tùy chọn IR socket
 
-Lệnh `ir` chỉ được đưa vào khi Whale được xây dựng bằng tính năng `socket-cli`.
+AST JSON `ir lower` cần feature `socket-cli`. `verify` và `print` cho IR văn bản không cần.
 
 ```shell
 cargo run -p whale --features socket-cli -- ir lower program.json
@@ -61,4 +70,4 @@ cargo run -p whale --features socket-cli -- ir lower program.json -o program.wir
 
 `ir lower` đọc JSON của Whale socket schema, chuyển đổi nó thành Whale IR và xác minh mô-đun. Văn bản IR được xuất ra đường dẫn stdout hoặc `-o`. `--target <triple>` thay thế chuỗi đích và `--no-verify` bỏ qua xác thực.
 
-Để sử dụng lệnh IR, Whale phải được xây dựng bằng tính năng `socket-cli`. Socket JSON nhà sản xuất và Whale phải sử dụng cùng socket schema version.
+Dựng với `socket-cli` để dùng `ir lower`. Bên tạo Socket JSON và Whale phải dùng cùng AST schema version.

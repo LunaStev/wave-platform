@@ -63,7 +63,7 @@ module {
 
 `%v0` and `%v1` define i32 constants. `add` defines `%v2`, which supplies the function's i32 return. Changing the return value to a Bool would violate the signature and fail verification. The addition remains an instruction at O0 even though both operands are constant.
 
-These are actual printer outputs, not input files for a text parser. Text parsing and IR execution are not yet available; the Rust builder is the available way to construct this module.
+Save the output as `answer.wir` to read and verify it with the text parser and CLI. IR execution is not yet available.
 
 ## Types
 
@@ -210,8 +210,7 @@ AST and typed IR use separate format versions and a common semantics version. Re
 
 Integers carry a bit width, signedness, and a textual numeric value. Floating-point constants carry a width and an exact bit pattern. A text IR round trip must preserve names, IDs, types, constants, ordering, attributes, and metadata. Whitespace and comment placement need not survive the round trip.
 
-The scalar AST JSON contract below is available. Printed typed IR carries version metadata, but its parser and full round-trip interchange remain unavailable.
-
+The AST JSON contract below and typed IR format 3 reading, verification and round-trip printing are available.
 
 ### Printed identities and quoted names
 
@@ -253,7 +252,45 @@ All name and string fields use double quotes: target, function/global/parameter/
 "line\ncolumn\tquote\"slash\\한글"
 ```
 
-Format 2 printed definitions must be migrated to explicit IDs, parameter IDs, quoted names and an entry reference. This changes only typed IR syntax; AST JSON format 2 and semantics version 1 remain unchanged. A textual parser and round-trip reader remain unavailable.
+Format 2 output must be migrated manually to explicit IDs, parameter IDs, quoted names and an entry reference. The reader accepts only format 3 with semantics version 1 and does not convert format 2 automatically. AST JSON format 2 is a separate contract.
+
+### Reading and verifying text IR
+
+`ir::parse_module` reads typed IR, verifies it and returns a `Module`. It accepts the current printer’s scalar, control-flow, memory, direct/indirect call and constant-expression syntax. It preserves IDs, names, types, exact integer and float bits, expression trees and evaluated results, block order, entry, alignment, signatures and link_name. Whitespace and `//` line comments become canonical output. Save the complete IR above as `answer.wir` and run these commands in the default build.
+
+```sh
+cargo run --locked -- ir verify answer.wir
+cargo run --locked -- ir print answer.wir -o canonical.wir
+```
+
+Unknown versions, fields, instructions and escapes, out-of-range literals, duplicate IDs, conflicting type annotations and trailing input are rejected. `ParseError` reports a byte offset and one-based line/Unicode-scalar column. Verification errors are attached to the containing function or global declaration when available. `print` also verifies input and preserves an existing output on failure. New syntax or semantics requires the corresponding format/semantics version change; unknown versions are errors.
+
+### Verification resource limits
+
+`IrLimits` defaults to 8 MiB of input, 1,000,000 tokens, 1,000,000 traversal nodes, and type/expression depths of 128 each. Root depth is 0; each child adds 1. Depths may be lowered or raised up to `MAX_IR_NESTING`, 256. Excessive depth/work returns `LimitError`, `VerifyError::ResourceLimit`, `ConstEvalError::ResourceLimit` or `CallError::ResourceLimit`. Nodes count traversal at each input boundary, including type annotations and expression nodes, rather than elapsed time.
+
+```rust
+use ir::{parse_module_with_limits, print_module, IrLimits};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let source = std::fs::read_to_string("answer.wir")?;
+    let limits = IrLimits {
+        max_type_depth: 32,
+        max_const_depth: 32,
+        max_nodes: 10_000,
+        ..IrLimits::default()
+    };
+    let module = parse_module_with_limits(&source, limits)?;
+    let canonical = print_module(&module);
+    let reread = parse_module_with_limits(&canonical, limits)?;
+    assert_eq!(print_module(&reread), canonical);
+    let invalid = source.replacen("format_version 3", "format_version 99", 1);
+    assert!(parse_module_with_limits(&invalid, limits).is_err());
+    Ok(())
+}
+```
+
+Pass limits to `verify_module_with_limits`, `ConstExpr::evaluate_with_limits`, `validate_signature_with_limits` and `ModuleBuilder::declare_function_with_limits` as well. Iterative type traversal precedes recursive clone, equality and diagnostics; constant evaluation uses a work stack. Borrowed Rust trees remain caller-owned, including Drop. Arbitrary unverified trees still have recursive clone/Drop; a rejected owned signature in the checked declaration API is disposed of iteratively. The reader retains legacy `undef` for existing lowering compatibility. Initialization tracking, runtime traps, pointer metadata and native execution remain separate unfinished features.
 
 ### Versioned AST JSON
 

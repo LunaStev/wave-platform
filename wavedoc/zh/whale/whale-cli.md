@@ -50,9 +50,18 @@ whale object input.bin -o output.o
 
 `object` 命令将原始字节放入 ELF64 `.text` 部分，并在偏移量 0 处添加全局 `start` 符号。它将原始机器代码包装在 ELF 对象文件中。
 
+## 文本 IR 验证与打印
+
+默认构建可以读取并验证 format 3 typed IR。将 [IR 参考](ir-reference)中的完整示例保存为 `answer.wir`。`print` 验证后输出规范文本，失败时保留已有文件。它不执行 IR 或生成 native 代码。
+
+```shell
+whale ir verify answer.wir
+whale ir print answer.wir -o canonical.wir
+```
+
 ## 可选 IR socket
 
-仅当使用 `socket-cli` 功能构建 Whale 时，才包含 `ir` 命令。
+AST JSON 的 `ir lower` 需要 `socket-cli` feature。文本 IR 的 `verify` 和 `print` 不需要。
 
 ```shell
 cargo run -p whale --features socket-cli -- ir lower program.json
@@ -61,4 +70,4 @@ cargo run -p whale --features socket-cli -- ir lower program.json -o program.wir
 
 `ir lower`读取Whalesocketschema的JSON，将其转换为WhaleIR，并验证模块。文本IR输出到路径stdout或`-o`。 `--target <triple>` 替换目标字符串，`--no-verify` 省略验证。
 
-要使用 IR 命令，Whale 必须使用 `socket-cli` 功能构建。 Socket JSON 生产者和 Whale 必须使用相同的 socket schema version。
+使用 `ir lower` 时须启用 `socket-cli` 构建。Socket JSON 生产者与 Whale 必须使用相同的 AST schema version。

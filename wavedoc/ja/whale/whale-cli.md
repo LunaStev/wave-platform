@@ -50,9 +50,18 @@ whale object input.bin -o output.o
 
 `object` コマンドは、生のバイトを ELF64 `.text` セクションに配置し、グローバル `start` シンボルをオフセット 0 に追加します。生のマシン コードを ELF オブジェクト ファイルにラップします。
 
+## テキスト IR の検証と出力
+
+標準ビルドで format 3 typed IR を読み取り・検証できます。[IR リファレンス](ir-reference)の完全な例を `answer.wir` に保存してください。`print` は検証後に標準形式で出力し、失敗時は既存ファイルを保護します。IR 実行や native コード生成は行いません。
+
+```shell
+whale ir verify answer.wir
+whale ir print answer.wir -o canonical.wir
+```
+
 ## オプション IR socket
 
-`ir`コマンドは、Whaleを`socket-cli`機能と共にビルドした場合にのみ含まれます。
+AST JSON の `ir lower` には `socket-cli` feature が必要です。テキスト IR の `verify` と `print` には不要です。
 
 ```shell
 cargo run -p whale --features socket-cli -- ir lower program.json
@@ -61,4 +70,4 @@ cargo run -p whale --features socket-cli -- ir lower program.json -o program.wir
 
 `ir lower`はWhalesocketschemaのJSONを読み、WhaleIRテキストIRはstdoutまたは`-o`パスに出力されます。 `--target <triple>`はターゲット文字列を置き換え、`--no-verify`は検証を省略します。
 
-IRコマンドを使用するには、Whaleを`socket-cli`機能と共にビルドする必要があります。 SocketJSON生産者とWhaleは同じsocketschemaversionを使用する必要があります。
+`ir lower` を使うには `socket-cli` でビルドしてください。Socket JSON の生成側と Whale は同じ AST schema version を使う必要があります。

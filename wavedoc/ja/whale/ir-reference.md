@@ -63,7 +63,7 @@ module {
 
 `%v0`と`%v1`はi32定数の定義です。 `add`が定義した`%v2`を関数のi32戻り値として使用します。戻り値をBoolに置き換えると、関数署名に合わず検証エラーになります。 2つのオペランドが定数であってもO0では加算命令を保持します。
 
-このコードは実際のプリンタ出力であり、テキストパーサに渡す入力ファイルではありません。テキスト解析とIR実行はまだサポートされておらず、現在はRustbuilderでこのモジュールを設定できます。
+上の出力を `answer.wir` に保存すると、テキストパーサと CLI で読み取り・検証できます。IR の実行は未対応です。
 
 ## タイプ
 
@@ -210,8 +210,7 @@ ASTとtypedIRはそれぞれのformatversionと共通semanticsversion読む方�
 
 整数はビット幅・signedness・文字列数で渡します。浮動小数点定数は幅と正確なビット列で渡されます。テキストIRのround-tripは、名前・ID・タイプ・定数・順序・属性・メタデータを保存する必要があります。スペースとコメントの配置は保存対象ではありません。
 
-以下のスカラーASTJSON契約が利用可能です。出力される typed IRにはバージョン情報が含まれますが、テキストパーサとの完全な往復交換はまだ未サポートです。
-
+以下の AST JSON 契約と typed IR format 3 の読み取り・検証・往復出力を利用できます。
 
 ### 出力される識別子と引用符付きの名前
 
@@ -253,7 +252,45 @@ module {
 "line\ncolumn\tquote\"slash\\한글"
 ```
 
-format 2 の出力定義は、明示的 ID、パラメータ ID、引用符付きの名前、エントリ参照へ移行する必要があります。typed IR の構文だけが変わり、AST JSON format 2 と semantics version 1 は維持されます。テキストパーサと round-trip reader はまだ利用できません。
+format 2 の出力は明示的な ID、パラメータ ID、引用符付きの名前、入口参照へ手動で移行してください。読み取りは format 3 と semantics version 1 のみ対応し、format 2 を自動変換しません。AST JSON format 2 は別の契約です。
+
+### テキスト IR の読み取りと検証
+
+`ir::parse_module` は typed IR を読み取り、検証して `Module` を返します。現在のプリンタのスカラー・制御フロー・メモリ・直接/間接呼び出し・定数式の構文を受け付けます。ID、名前、型、正確な整数と float ビット、式の木と評価結果、ブロック順序、入口、整列、署名、link_name を保存します。空白と `//` 行コメントは標準出力に整理されます。上の完全な IR を `answer.wir` に保存し、標準ビルドで次を実行してください。
+
+```sh
+cargo run --locked -- ir verify answer.wir
+cargo run --locked -- ir print answer.wir -o canonical.wir
+```
+
+未知のバージョン・フィールド・命令・エスケープ、範囲外リテラル、重複 ID、矛盾する型表記、末尾の余分な入力は拒否されます。`ParseError` はバイト位置と、1 から始まる行・Unicode scalar 単位の列を返します。検証エラーは可能なら該当する関数またはグローバル宣言に結び付けられます。`print` も検証し、失敗時には既存の出力を保護します。新しい構文や意味には対応する format/semantics version の変更が必要で、未知のバージョンはエラーです。
+
+### 検証の資源制限
+
+`IrLimits` の既定値は入力 8 MiB、トークン 1,000,000 個、走査ノード 1,000,000 個、型と定数式の深さは各 128 です。根の深さは 0、子ごとに 1 増えます。深さは小さくするか `MAX_IR_NESTING` の 256 まで大きくできます。超過は `LimitError`、`VerifyError::ResourceLimit`、`ConstEvalError::ResourceLimit` または `CallError::ResourceLimit` を返します。ノード数は型表記と式を含む入力境界ごとの走査量であり、経過時間ではありません。
+
+```rust
+use ir::{parse_module_with_limits, print_module, IrLimits};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let source = std::fs::read_to_string("answer.wir")?;
+    let limits = IrLimits {
+        max_type_depth: 32,
+        max_const_depth: 32,
+        max_nodes: 10_000,
+        ..IrLimits::default()
+    };
+    let module = parse_module_with_limits(&source, limits)?;
+    let canonical = print_module(&module);
+    let reread = parse_module_with_limits(&canonical, limits)?;
+    assert_eq!(print_module(&reread), canonical);
+    let invalid = source.replacen("format_version 3", "format_version 99", 1);
+    assert!(parse_module_with_limits(&invalid, limits).is_err());
+    Ok(())
+}
+```
+
+`verify_module_with_limits`、`ConstExpr::evaluate_with_limits`、`validate_signature_with_limits`、`ModuleBuilder::declare_function_with_limits` にも制限を渡せます。型は再帰的 clone・比較・診断の前に反復走査し、定数式は作業スタックで評価します。借用した Rust の木の所有権と Drop は呼び出し側にあります。任意の未検証の木の clone/Drop は再帰的なままですが、checked 宣言 API が所有する拒否された署名は反復的に解放します。既存 lowering との互換性のため legacy `undef` を保存します。初期化追跡、実行時 trap、ポインタメタデータ、native 実行は別の未完成機能です。
 
 ### バージョンが指定された AST JSON
 
