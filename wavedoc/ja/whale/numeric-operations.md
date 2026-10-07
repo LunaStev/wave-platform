@@ -30,7 +30,7 @@ overflowで実行を中断する言語のフロントエンドは、checked操�
 
 ### Wrapと明示的検査を表現したIR
 
-次のモジュールは、Rustbuilderで構成され、検証器を通過した現在のプリンタ出力です。テキストパーサーと実行バックエンドはまだ提供されていません。
+この完全な形式 3 モジュールを `integer-operations.wir` に保存してください。テキスト reader が受理し、スカラーインタプリタで実行できます。
 
 ```text
 module {
@@ -41,6 +41,10 @@ module {
 
   declare @f0 "add_u8": whale () -> u8, linkage internal
   declare @f1 "require_no_overflow": whale () -> u8, linkage internal
+
+  declare @f2 "minimum_division": whale () -> i8, linkage internal
+  declare @f3 "minimum_remainder": whale () -> i8, linkage internal
+  declare @f4 "negative_shift": whale () -> i8, linkage internal
 
   fn @f0 "add_u8"() -> u8, entry %b0 {
   %b0 "entry":
@@ -61,10 +65,58 @@ module {
     ret u8 %v6
   }
 
+  fn @f2 "minimum_division"() -> i8, entry %b0 {
+  %b0 "entry":
+    %v0: i8 = const i8 -128
+    %v1: i8 = const i8 -1
+    %v2: i8 = sdiv i8 %v0, %v1
+    ret i8 %v2
+  }
+
+  fn @f3 "minimum_remainder"() -> i8, entry %b0 {
+  %b0 "entry":
+    %v0: i8 = const i8 -128
+    %v1: i8 = const i8 -1
+    %v2: i8 = srem i8 %v0, %v1
+    ret i8 %v2
+  }
+
+  fn @f4 "negative_shift"() -> i8, entry %b0 {
+  %b0 "entry":
+    %v0: i8 = const i8 -1
+    %v1: i8 = const i8 -1
+    %v2: i8 = shl i8 %v0, %v1
+    ret i8 %v2
+  }
+
 }
 ```
 
-算術規約に基づき、`add_u8` は 256 を 8 ビット結果 0 にラップします。 `require_no_overflow` は、ラップされた結果を `extract ..., 0` で抽出し、Bool オーバーフロー フラグを `extract ..., 1` で抽出します。フラグが true の場合、`trap_if` はリターン前に実行を停止します。これらは指定された結果であり、実装されたインタープリターからの出力ではありません。
+`add_u8` は 256 の下位 8 ビットである 0 を返します。`minimum_division` は −128、`minimum_remainder` は 0 を返します。`negative_shift` は −1 を unsigned count 255 と解釈し、255 mod 8 = 7 を使います。明示的な関数 ID で実行してください。
+
+```shell
+whale ir run integer-operations.wir --function @f0
+whale ir run integer-operations.wir --function @f2
+whale ir run integer-operations.wir --function @f3
+whale ir run integer-operations.wir --function @f4
+```
+
+```text
+u8 0
+i8 -128
+i8 0
+i8 -128
+```
+
+`require_no_overflow` はインデックス 0 のラップ結果と 1 の Bool overflow フラグを取り出します。明示的 trap_if が return の前に停止します。次のコマンドは終了状態 1 で診断を stderr に出力します。
+
+```shell
+whale ir run integer-operations.wir --function @f1
+```
+
+```text
+Error: integer-operations.wir: trap at @f1 %b1 instruction 5: "integer overflow" (after 6 steps)
+```
 
 ## 割り算と余り
 

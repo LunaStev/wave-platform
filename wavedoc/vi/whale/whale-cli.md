@@ -71,3 +71,16 @@ cargo run -p whale --features socket-cli -- ir lower program.json -o program.wir
 `ir lower` đọc JSON của Whale socket schema, chuyển đổi nó thành Whale IR và xác minh mô-đun. Văn bản IR được xuất ra đường dẫn stdout hoặc `-o`. `--target <triple>` thay thế chuỗi đích và `--no-verify` bỏ qua xác thực.
 
 Dựng với `socket-cli` để dùng `ir lower`. Bên tạo Socket JSON và Whale phải dùng cùng AST schema version.
+
+
+## Trình thông dịch số nguyên vô hướng
+
+Bản dựng mặc định cũng chạy IR số nguyên/Bool vô hướng. Bắt buộc có `--function @fN`; lặp `--arg` cho đối số thập phân chính xác hoặc true/false cho Bool. `--max-steps` đếm lệnh và terminator, mặc định 1,000,000. run không nhận -o hay --no-verify. Lưu vòng lặp hoàn chỉnh từ [tham chiếu IR](ir-reference) thành `swap-loop.wir`:
+
+```shell
+whale ir run swap-loop.wir --function @f7 --arg 3 --max-steps 100
+```
+
+```text
+i32 22
+```

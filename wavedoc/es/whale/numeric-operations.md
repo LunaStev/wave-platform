@@ -30,7 +30,7 @@ Las interfaces de los lenguajes que interrumpen la ejecución en overflow deben 
 
 ### Wrap y IR expresando un cheque explícito
 
-Los siguientes módulos están configurados como Rust builder y son la salida de impresora actual que pasó el verificador. El analizador de texto y el backend de ejecución aún no están disponibles.
+Guarde este módulo completo de formato 3 como `integer-operations.wir`; el lector de texto lo acepta y el intérprete escalar lo ejecuta.
 
 ```text
 module {
@@ -41,6 +41,10 @@ module {
 
   declare @f0 "add_u8": whale () -> u8, linkage internal
   declare @f1 "require_no_overflow": whale () -> u8, linkage internal
+
+  declare @f2 "minimum_division": whale () -> i8, linkage internal
+  declare @f3 "minimum_remainder": whale () -> i8, linkage internal
+  declare @f4 "negative_shift": whale () -> i8, linkage internal
 
   fn @f0 "add_u8"() -> u8, entry %b0 {
   %b0 "entry":
@@ -61,10 +65,58 @@ module {
     ret u8 %v6
   }
 
+  fn @f2 "minimum_division"() -> i8, entry %b0 {
+  %b0 "entry":
+    %v0: i8 = const i8 -128
+    %v1: i8 = const i8 -1
+    %v2: i8 = sdiv i8 %v0, %v1
+    ret i8 %v2
+  }
+
+  fn @f3 "minimum_remainder"() -> i8, entry %b0 {
+  %b0 "entry":
+    %v0: i8 = const i8 -128
+    %v1: i8 = const i8 -1
+    %v2: i8 = srem i8 %v0, %v1
+    ret i8 %v2
+  }
+
+  fn @f4 "negative_shift"() -> i8, entry %b0 {
+  %b0 "entry":
+    %v0: i8 = const i8 -1
+    %v1: i8 = const i8 -1
+    %v2: i8 = shl i8 %v0, %v1
+    ret i8 %v2
+  }
+
 }
 ```
 
-Según el contrato aritmético, `add_u8` ajusta 256 al resultado 0 de 8 bits. `require_no_overflow` extrae el resultado ajustado con `extract ..., 0` y el indicador de desbordamiento Bool con `extract ..., 1`. Si el indicador es true, `trap_if` detiene la ejecución antes de la devolución. Estos son los resultados especificados, no los resultados de un intérprete implementado.
+`add_u8` devuelve 0, los ocho bits bajos de 256. `minimum_division` devuelve −128 y `minimum_remainder`, 0. `negative_shift` interpreta −1 como unsigned count 255 y aplica 255 mod 8 = 7. Ejecute por ID explícito:
+
+```shell
+whale ir run integer-operations.wir --function @f0
+whale ir run integer-operations.wir --function @f2
+whale ir run integer-operations.wir --function @f3
+whale ir run integer-operations.wir --function @f4
+```
+
+```text
+u8 0
+i8 -128
+i8 0
+i8 -128
+```
+
+`require_no_overflow` extrae el resultado envuelto en el índice 0 y el indicador Bool de overflow en el 1. El trap_if explícito detiene antes del retorno. El comando siguiente termina con estado 1 y escribe el diagnóstico en stderr:
+
+```shell
+whale ir run integer-operations.wir --function @f1
+```
+
+```text
+Error: integer-operations.wir: trap at @f1 %b1 instruction 5: "integer overflow" (after 6 steps)
+```
 
 ## División y resto
 

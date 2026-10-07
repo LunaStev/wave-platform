@@ -30,7 +30,7 @@ Giao diện người dùng cho các ngôn ngữ phá vỡ quá trình thực thi
 
 ### Wrap và IR thể hiện sự kiểm tra rõ ràng
 
-Các mô-đun sau được định cấu hình là Rust builder và là đầu ra máy in hiện tại đã vượt qua trình xác minh. Trình phân tích cú pháp văn bản và phần phụ trợ thực thi vẫn chưa có sẵn.
+Lưu mô-đun hoàn chỉnh định dạng 3 này thành `integer-operations.wir`; bộ đọc văn bản chấp nhận và trình thông dịch vô hướng chạy được.
 
 ```text
 module {
@@ -41,6 +41,10 @@ module {
 
   declare @f0 "add_u8": whale () -> u8, linkage internal
   declare @f1 "require_no_overflow": whale () -> u8, linkage internal
+
+  declare @f2 "minimum_division": whale () -> i8, linkage internal
+  declare @f3 "minimum_remainder": whale () -> i8, linkage internal
+  declare @f4 "negative_shift": whale () -> i8, linkage internal
 
   fn @f0 "add_u8"() -> u8, entry %b0 {
   %b0 "entry":
@@ -61,10 +65,58 @@ module {
     ret u8 %v6
   }
 
+  fn @f2 "minimum_division"() -> i8, entry %b0 {
+  %b0 "entry":
+    %v0: i8 = const i8 -128
+    %v1: i8 = const i8 -1
+    %v2: i8 = sdiv i8 %v0, %v1
+    ret i8 %v2
+  }
+
+  fn @f3 "minimum_remainder"() -> i8, entry %b0 {
+  %b0 "entry":
+    %v0: i8 = const i8 -128
+    %v1: i8 = const i8 -1
+    %v2: i8 = srem i8 %v0, %v1
+    ret i8 %v2
+  }
+
+  fn @f4 "negative_shift"() -> i8, entry %b0 {
+  %b0 "entry":
+    %v0: i8 = const i8 -1
+    %v1: i8 = const i8 -1
+    %v2: i8 = shl i8 %v0, %v1
+    ret i8 %v2
+  }
+
 }
 ```
 
-Theo hợp đồng số học, `add_u8` gói 256 thành kết quả 8 bit 0. `require_no_overflow` trích xuất kết quả được gói bằng `extract ..., 0` và cờ tràn Bool với `extract ..., 1`. Nếu cờ là true, `trap_if` dừng thực thi trước khi trả về. Đây là kết quả được chỉ định, không phải kết quả đầu ra từ trình thông dịch được triển khai.
+`add_u8` trả về 0, tám bit thấp của 256. `minimum_division` trả về −128, `minimum_remainder` trả về 0. `negative_shift` diễn giải −1 thành unsigned count 255 rồi dùng 255 mod 8 = 7. Chạy bằng ID hàm tường minh:
+
+```shell
+whale ir run integer-operations.wir --function @f0
+whale ir run integer-operations.wir --function @f2
+whale ir run integer-operations.wir --function @f3
+whale ir run integer-operations.wir --function @f4
+```
+
+```text
+u8 0
+i8 -128
+i8 0
+i8 -128
+```
+
+`require_no_overflow` lấy kết quả wrap tại chỉ số 0 và cờ Bool overflow tại chỉ số 1. trap_if tường minh dừng trước return. Lệnh sau thoát với trạng thái 1 và ghi chẩn đoán vào stderr:
+
+```shell
+whale ir run integer-operations.wir --function @f1
+```
+
+```text
+Error: integer-operations.wir: trap at @f1 %b1 instruction 5: "integer overflow" (after 6 steps)
+```
 
 ## Phép chia và số dư
 

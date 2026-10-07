@@ -30,7 +30,7 @@ N 位整数具有 N 值位。无符号整数的范围是 0 到 2^N − 1，有�
 
 ### Wrap 和 IR 表示显式检查
 
-以下模块配置为Rust builder，是当前已通过验证的打印机输出。文本解析器和执行后端尚不可用。
+将此完整格式 3 模块保存为 `integer-operations.wir`。文本读取器接受它，标量解释器可以执行它。
 
 ```text
 module {
@@ -41,6 +41,10 @@ module {
 
   declare @f0 "add_u8": whale () -> u8, linkage internal
   declare @f1 "require_no_overflow": whale () -> u8, linkage internal
+
+  declare @f2 "minimum_division": whale () -> i8, linkage internal
+  declare @f3 "minimum_remainder": whale () -> i8, linkage internal
+  declare @f4 "negative_shift": whale () -> i8, linkage internal
 
   fn @f0 "add_u8"() -> u8, entry %b0 {
   %b0 "entry":
@@ -61,10 +65,58 @@ module {
     ret u8 %v6
   }
 
+  fn @f2 "minimum_division"() -> i8, entry %b0 {
+  %b0 "entry":
+    %v0: i8 = const i8 -128
+    %v1: i8 = const i8 -1
+    %v2: i8 = sdiv i8 %v0, %v1
+    ret i8 %v2
+  }
+
+  fn @f3 "minimum_remainder"() -> i8, entry %b0 {
+  %b0 "entry":
+    %v0: i8 = const i8 -128
+    %v1: i8 = const i8 -1
+    %v2: i8 = srem i8 %v0, %v1
+    ret i8 %v2
+  }
+
+  fn @f4 "negative_shift"() -> i8, entry %b0 {
+  %b0 "entry":
+    %v0: i8 = const i8 -1
+    %v1: i8 = const i8 -1
+    %v2: i8 = shl i8 %v0, %v1
+    ret i8 %v2
+  }
+
 }
 ```
 
-在算术契约下，`add_u8`将256包装为8位结果0。`require_no_overflow`使用`extract ..., 0`提取包装后的结果，并使用`extract ..., 1`提取Bool溢出标志。如果标志为true，则`trap_if`在返回之前停止执行。这些是指定的结果，而不是实现的解释器的输出。
+`add_u8` 返回 256 的低 8 位，即 0。`minimum_division` 返回 −128，`minimum_remainder` 返回 0。`negative_shift` 将 −1 解释为 unsigned count 255，再取 255 mod 8 = 7。用显式函数 ID 执行：
+
+```shell
+whale ir run integer-operations.wir --function @f0
+whale ir run integer-operations.wir --function @f2
+whale ir run integer-operations.wir --function @f3
+whale ir run integer-operations.wir --function @f4
+```
+
+```text
+u8 0
+i8 -128
+i8 0
+i8 -128
+```
+
+`require_no_overflow` 从索引 0 提取回绕结果，从索引 1 提取 Bool overflow 标志。显式 trap_if 在返回前停止。以下命令以状态 1 退出，并将诊断写到 stderr：
+
+```shell
+whale ir run integer-operations.wir --function @f1
+```
+
+```text
+Error: integer-operations.wir: trap at @f1 %b1 instruction 5: "integer overflow" (after 6 steps)
+```
 
 ## 除法和余数
 

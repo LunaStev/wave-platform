@@ -30,7 +30,7 @@ overflow에서 실행을 중단하는 언어의 프런트엔드는 checked 연�
 
 ### Wrap과 명시적 검사를 표현한 IR
 
-다음 모듈은 Rust builder로 구성해 검증기를 통과한 현재 프린터 출력입니다. 텍스트 파서와 실행 백엔드는 아직 제공되지 않습니다.
+다음 전체 형식 3 모듈을 `integer-operations.wir`로 저장하세요. 텍스트 reader가 받는 입력이며 스칼라 인터프리터에서 실행할 수 있습니다.
 
 ```text
 module {
@@ -41,6 +41,10 @@ module {
 
   declare @f0 "add_u8": whale () -> u8, linkage internal
   declare @f1 "require_no_overflow": whale () -> u8, linkage internal
+
+  declare @f2 "minimum_division": whale () -> i8, linkage internal
+  declare @f3 "minimum_remainder": whale () -> i8, linkage internal
+  declare @f4 "negative_shift": whale () -> i8, linkage internal
 
   fn @f0 "add_u8"() -> u8, entry %b0 {
   %b0 "entry":
@@ -61,10 +65,58 @@ module {
     ret u8 %v6
   }
 
+  fn @f2 "minimum_division"() -> i8, entry %b0 {
+  %b0 "entry":
+    %v0: i8 = const i8 -128
+    %v1: i8 = const i8 -1
+    %v2: i8 = sdiv i8 %v0, %v1
+    ret i8 %v2
+  }
+
+  fn @f3 "minimum_remainder"() -> i8, entry %b0 {
+  %b0 "entry":
+    %v0: i8 = const i8 -128
+    %v1: i8 = const i8 -1
+    %v2: i8 = srem i8 %v0, %v1
+    ret i8 %v2
+  }
+
+  fn @f4 "negative_shift"() -> i8, entry %b0 {
+  %b0 "entry":
+    %v0: i8 = const i8 -1
+    %v1: i8 = const i8 -1
+    %v2: i8 = shl i8 %v0, %v1
+    ret i8 %v2
+  }
+
 }
 ```
 
-산술 계약에 따르면 `add_u8`은 256을 8비트로 wrap한 0을 반환합니다. `require_no_overflow`는 감긴 결과(`extract ..., 0`)와 Bool overflow 플래그(`extract ..., 1`)를 분리합니다. 플래그가 참이면 명시적인 `trap_if`가 반환 전에 실행을 중단합니다. 이는 정의된 실행 결과이며, 구현된 인터프리터에서 얻은 실행 결과는 아닙니다.
+`add_u8`은 256의 낮은 8비트인 0을 반환합니다. `minimum_division`은 −128, `minimum_remainder`는 0을 반환합니다. `negative_shift`는 −1을 unsigned count 255로 해석한 뒤 255 mod 8 = 7을 적용합니다. 명시적인 함수 ID로 실행하세요.
+
+```shell
+whale ir run integer-operations.wir --function @f0
+whale ir run integer-operations.wir --function @f2
+whale ir run integer-operations.wir --function @f3
+whale ir run integer-operations.wir --function @f4
+```
+
+```text
+u8 0
+i8 -128
+i8 0
+i8 -128
+```
+
+`require_no_overflow`는 인덱스 0에서 감긴 결과, 인덱스 1에서 Bool overflow 플래그를 추출합니다. 명시적인 trap_if가 반환 전에 중단합니다. 다음 명령은 상태 1로 종료하고 stderr에 진단을 출력합니다.
+
+```shell
+whale ir run integer-operations.wir --function @f1
+```
+
+```text
+Error: integer-operations.wir: trap at @f1 %b1 instruction 5: "integer overflow" (after 6 steps)
+```
 
 ## 나눗셈과 나머지
 

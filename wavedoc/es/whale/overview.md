@@ -45,7 +45,7 @@ El documento de referencia define las reglas semánticas para Whale. Las funcion
 |biblioteca de objetos|Composición de objetos, payload sin BSS, validación de objetivos, AMD64 ELF64 serialización e implementación de registro Wave seleccionable para verificar el tamaño.|Los objetos reubicables no son ejecutables.|
 | IR | Construcción, impresión, llamadas directas/indirectas con verificación de firma, reducción de versiones AST, validación de objetivos y diseños tipográficos verificados | AST format 2 / typed IR format 3, constantes de bits exactos y lectura, verificación e ida y vuelta de texto disponibles; la emisión de llamadas máquina sigue pendiente |
 |enlazador|Interpretación de símbolos, verificación de objetivos de entrada, inspección de ubicación de sección de archivo/memoria|No se admite la aplicación de reubicación completa ni la generación de archivos ejecutables.|
-|Ejecución y depuración|Reglas semánticas definidas en este documento.|IR intérprete, generación de código native completa, inspección en tiempo de ejecución de la memoria de seguimiento, salida DWARF no compatible|
+|Ejecución y depuración| Ejecución de enteros/Bool escalares y bucles limitados | Memoria, float, llamadas, código native y DWARF aún no disponibles |
 
 Las reglas que prohíben el comportamiento indefinido se aplican a las memorias de rastreo y IR verificadas. La implementación experimental aún no implementa todas las comprobaciones de tiempo de ejecución en la documentación de referencia de memoria/ejecución.
 

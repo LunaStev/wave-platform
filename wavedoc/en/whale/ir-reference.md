@@ -61,7 +61,7 @@ module {
 }
 ```
 
-`%v0` and `%v1` define i32 constants. `add` defines `%v2`, which supplies the function's i32 return. Changing the return value to a Bool would violate the signature and fail verification. The addition remains an instruction at O0 even though both operands are constant.
+Save the output as `answer.wir` to read and verify it with the text parser or CLI. Scalar integer execution is described below.
 
 Save the output as `answer.wir` to read and verify it with the text parser and CLI. IR execution is not yet available.
 
@@ -198,9 +198,9 @@ Select chooses between values that have already been computed. It does not suppr
 
 ## Validation and traps
 
-Malformed IR is rejected by verification. Runtime violations of defined execution conditions produce traps; `undef` and `poison` are not permitted values. Builder misuse, duplicate definitions, and attempts to add a second terminator must return structured errors.
+Malformed IR is rejected by verification. Runtime conditions in the supported interpreter subset produce defined traps. The parser/verifier still retain legacy `undef` for existing lowering compatibility, but the interpreter rejects it explicitly; it does not turn uninitialized storage into zero. Initialization tracking remains unfinished. Builder errors remain separate from execution traps.
 
-A trap contains a reason, source location, and IR ID. It stops subsequent execution. Native execution terminates the program; the interpreter API returns a Trap error. Earlier side effects remain, but buffer flushing, destructors, and stack unwinding are not guaranteed.
+The current `InterpreterTrap` reports a reason, executed step count and `ExecutionSite`: function ID, block ID, zero-based instruction index and optional result value ID. The terminator index follows the instructions. CLI diagnostics also name the input file. Typed IR does not yet carry source spans, so these are IR locations, not source line numbers. A trap returns an error and stops subsequent execution; the library does not abort the host process.
 
 The guarantee covers verified IR and tracked memory. External C, raw addresses, and inline assembly have separate contracts; violations beyond those boundaries are not guaranteed to be detected. See the [memory model](memory-model).
 
@@ -290,7 +290,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-Pass limits to `verify_module_with_limits`, `ConstExpr::evaluate_with_limits`, `validate_signature_with_limits` and `ModuleBuilder::declare_function_with_limits` as well. Iterative type traversal precedes recursive clone, equality and diagnostics; constant evaluation uses a work stack. Borrowed Rust trees remain caller-owned, including Drop. Arbitrary unverified trees still have recursive clone/Drop; a rejected owned signature in the checked declaration API is disposed of iteratively. The reader retains legacy `undef` for existing lowering compatibility. Initialization tracking, runtime traps, pointer metadata and native execution remain separate unfinished features.
+Pass limits to `verify_module_with_limits`, `ConstExpr::evaluate_with_limits`, `validate_signature_with_limits` and `ModuleBuilder::declare_function_with_limits` as well. Iterative type traversal precedes recursive clone, equality and diagnostics; constant evaluation uses a work stack. Borrowed Rust trees remain caller-owned, including Drop. Arbitrary unverified trees still have recursive clone/Drop; a rejected owned signature in the checked declaration API is disposed of iteratively. The reader retains legacy `undef` for existing lowering compatibility. Initialization tracking, memory-access checks, pointer metadata and native execution remain separate unfinished features.
 
 ### Versioned AST JSON
 
@@ -392,3 +392,80 @@ Failed to parse socket JSON: unsupported AST format_version 99; expected 2
 ```
 
 The command exits nonzero without creating an output or replacing an existing file. A type mismatch also fails before output publication. A binary built without `socket-cli` exits with status 2 and prints a recovery command containing `--features socket-cli`.
+
+
+## Scalar integer interpreter
+
+The default build executes a verified Whale-convention function with integer/Bool parameters and an integer/Bool or void return. It supports constants and constant declarations, mov, integer arithmetic and comparisons, integer casts, checked pairs and extracts, select, phi, branches, switch, return, trap_if and trap. Memory, float, calls, addresses, general aggregates and legacy `undef` are unsupported execution operations. The whole module is verified first; every block of the selected function must belong to this subset, including unreachable blocks. Other functions need only pass verification. This does not execute the memory-based Wave lowering examples yet.
+
+`InterpreterOptions::max_steps` defaults to 1,000,000. Each executed instruction, including a phi, and each terminator consumes one step. A zero limit prevents the first operation; an infinite branch loop returns `InterpreterError::StepLimit`. `ir_limits` independently bounds verification. Unused arithmetic still executes and can trap. Overflow from checked arithmetic is a Bool result; only an explicit trap_if makes it a trap.
+
+Save this complete module as `swap-loop.wir`. The entry block is explicit although the exit block is stored first. On entry to a block, all phi inputs are read from the previous block before any phi result is written. Three iterations swap 11 and 22 three times and return 22.
+
+```text
+module {
+  format_version 3
+  semantics_version 1
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  declare @f7 "swap_loop": whale (u32) -> i32, linkage internal
+
+  fn @f7 "swap_loop"(%v0 "iterations": u32) -> i32, entry %b11 {
+  %b90 "exit":
+    ret i32 %v5
+  %b11 "entry":
+    %v1: i32 = const i32 11
+    %v2: i32 = const i32 22
+    %v3: u32 = const u32 0
+    %v4: u32 = const u32 1
+    br label %b20
+  %b20 "loop":
+    %v5: i32 = phi i32 [ %v1, %b11 ], [ %v6, %b30 ]
+    %v6: i32 = phi i32 [ %v2, %b11 ], [ %v5, %b30 ]
+    %v7: u32 = phi u32 [ %v3, %b11 ], [ %v9, %b30 ]
+    %v8: bool = icmp ult u32 %v7, %v0
+    cbr bool %v8, label %b30, label %b90
+  %b30 "next":
+    %v9: u32 = add u32 %v7, %v4
+    br label %b20
+  }
+
+}
+```
+
+```shell
+whale ir run swap-loop.wir --function @f7 --arg 3 --max-steps 100
+```
+
+```text
+i32 22
+```
+
+The Rust API returns a value and step count, or a structured verification, unsupported-operation, argument, step-limit or trap error. This complete program reads the same `swap-loop.wir` file:
+
+```rust
+use ir::{interpret_with_options, parse_module, ConstValue, FunctionId,
+         InterpreterError, InterpreterOptions};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let source = std::fs::read_to_string("swap-loop.wir")?;
+    let module = parse_module(&source)?;
+    let options = InterpreterOptions {
+        max_steps: 100,
+        ..InterpreterOptions::default()
+    };
+    let result = interpret_with_options(
+        &module, FunctionId(7), &[ConstValue::U(3)], options,
+    )?;
+    assert_eq!(result.value, Some(ConstValue::I(22)));
+    assert_eq!(result.steps, 32);
+    let stopped = interpret_with_options(
+        &module, FunctionId(7), &[ConstValue::U(3)],
+        InterpreterOptions { max_steps: 0, ..options },
+    );
+    assert!(matches!(stopped, Err(InterpreterError::StepLimit { .. })));
+    println!("i32 22");
+    Ok(())
+}
+```

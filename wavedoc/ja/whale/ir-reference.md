@@ -61,7 +61,7 @@ module {
 }
 ```
 
-`%v0`と`%v1`はi32定数の定義です。 `add`が定義した`%v2`を関数のi32戻り値として使用します。戻り値をBoolに置き換えると、関数署名に合わず検証エラーになります。 2つのオペランドが定数であってもO0では加算命令を保持します。
+出力を `answer.wir` に保存するとテキストパーサーと CLI で読込み・検証できます。スカラー整数実行は以下で説明します。
 
 上の出力を `answer.wir` に保存すると、テキストパーサと CLI で読み取り・検証できます。IR の実行は未対応です。
 
@@ -198,9 +198,9 @@ Selectは、すでに計算された値の1つを選択します。どちらの�
 
 ## 検証課 trap
 
-無効なIRは検証フェーズで拒否されます。実行条件違反は定義されたtrapとして扱われ、`undef`と`poison`は許容値ではありません。 builder誤用、重複定義、2番目のterminator追加は構造エラーとして返される必要があります。
+不正な IR は検証で拒否します。サポートするインタプリタ部分集合の実行条件違反は定義済み trap です。既存 lowering との互換性のためパーサー・検証器は legacy `undef` を保存しますが、インタプリタは明示的に拒否します。未初期化領域を 0 に置き換えず、初期化追跡は未完成です。builder エラーは実行 trap とは別です。
 
-trapは理由・ソース位置・IRIDを含み、以降の実行を中断します。 native実行ではプログラムを終了し、インタプリタAPIではTrapエラーを返します。以前の副作用は保存されますが、バッファflush・デストラクタ呼び出し・スタックunwindingは保証しません。
+現在の `InterpreterTrap` は理由、実行段階数、`ExecutionSite` を返します。位置は関数 ID、ブロック ID、0 始まりの命令インデックス、任意の結果値 ID です。terminator は命令列の直後のインデックスです。CLI は入力ファイルも表示します。typed IR にソース span はまだなく、これはソース行番号ではなく IR 位置です。trap はエラーを返して後続実行を停止し、ライブラリはホストプロセスを終了しません。
 
 この保証は、実績のあるIRおよびトレースメモリに適用されます。外部C・生アドレス・インラインアセンブリは別途契約を有し、その境界外の違反まで常に検出するわけではありません。 [メモリモデル](memory-model)を参照してください。
 
@@ -290,7 +290,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-`verify_module_with_limits`、`ConstExpr::evaluate_with_limits`、`validate_signature_with_limits`、`ModuleBuilder::declare_function_with_limits` にも制限を渡せます。型は再帰的 clone・比較・診断の前に反復走査し、定数式は作業スタックで評価します。借用した Rust の木の所有権と Drop は呼び出し側にあります。任意の未検証の木の clone/Drop は再帰的なままですが、checked 宣言 API が所有する拒否された署名は反復的に解放します。既存 lowering との互換性のため legacy `undef` を保存します。初期化追跡、実行時 trap、ポインタメタデータ、native 実行は別の未完成機能です。
+`verify_module_with_limits`、`ConstExpr::evaluate_with_limits`、`validate_signature_with_limits`、`ModuleBuilder::declare_function_with_limits` にも制限を渡せます。型は再帰的 clone・比較・診断の前に反復走査し、定数式は作業スタックで評価します。借用した Rust の木の所有権と Drop は呼び出し側にあります。任意の未検証の木の clone/Drop は再帰的なままですが、checked 宣言 API が所有する拒否された署名は反復的に解放します。既存 lowering との互換性のため legacy `undef` を保存します。初期化追跡、メモリアクセス検査、ポインタメタデータ、native 実行は別の未完成機能です。
 
 ### バージョンが指定された AST JSON
 
@@ -392,3 +392,80 @@ Failed to parse socket JSON: unsupported AST format_version 99; expected 2
 ```
 
 コマンドはゼロ以外の状態で終了し、新しい出力を作成したり既存のファイルを上書きしたりしません。型の不一致も出力発行前に失敗します。 `socket-cli`なしでビルドしたバイナリは状態2で終了し、`--features socket-cli`を含むリカバリコマンドを出力します。
+
+
+## スカラー整数インタプリタ
+
+デフォルトビルドは整数・Bool 引数と整数・Bool または void 戻り値を持つ検証済み Whale 呼出規約の関数を実行します。定数と定数宣言、mov、整数演算・比較・cast、checked ペアと extract、select、phi、分岐、switch、return、trap_if、trap をサポートします。メモリ、float、呼出し、アドレス、一般 aggregate、legacy `undef` の実行は未対応です。モジュール全体を先に検証し、選択した関数は到達不能なブロックもこの部分集合に属する必要があります。他の関数は検証だけが必要です。メモリを使う Wave lowering の例はまだ実行できません。
+
+`InterpreterOptions::max_steps` の既定値は 1,000,000 です。phi を含む実行命令と terminator はそれぞれ一段階を消費します。0 なら最初の操作の前に停止し、無限分岐ループは `InterpreterError::StepLimit` を返します。`ir_limits` は検証量を別に制限します。未使用の算術も実行され trap し得ます。checked overflow は Bool 結果であり、明示的 trap_if がある場合だけ trap になります。
+
+この完全なモジュールを `swap-loop.wir` に保存してください。終了ブロックを先に保存しても entry は明示されています。ブロックに入るとすべての phi 入力を前のブロックの値から読み、その後で結果を一括して書きます。3 回の反復で 11 と 22 を 3 回交換して 22 を返します。
+
+```text
+module {
+  format_version 3
+  semantics_version 1
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  declare @f7 "swap_loop": whale (u32) -> i32, linkage internal
+
+  fn @f7 "swap_loop"(%v0 "iterations": u32) -> i32, entry %b11 {
+  %b90 "exit":
+    ret i32 %v5
+  %b11 "entry":
+    %v1: i32 = const i32 11
+    %v2: i32 = const i32 22
+    %v3: u32 = const u32 0
+    %v4: u32 = const u32 1
+    br label %b20
+  %b20 "loop":
+    %v5: i32 = phi i32 [ %v1, %b11 ], [ %v6, %b30 ]
+    %v6: i32 = phi i32 [ %v2, %b11 ], [ %v5, %b30 ]
+    %v7: u32 = phi u32 [ %v3, %b11 ], [ %v9, %b30 ]
+    %v8: bool = icmp ult u32 %v7, %v0
+    cbr bool %v8, label %b30, label %b90
+  %b30 "next":
+    %v9: u32 = add u32 %v7, %v4
+    br label %b20
+  }
+
+}
+```
+
+```shell
+whale ir run swap-loop.wir --function @f7 --arg 3 --max-steps 100
+```
+
+```text
+i32 22
+```
+
+Rust API は値と段階数、または構造化された検証・未対応操作・引数・段階制限・trap エラーを返します。この完全なプログラムは同じ `swap-loop.wir` を読みます。
+
+```rust
+use ir::{interpret_with_options, parse_module, ConstValue, FunctionId,
+         InterpreterError, InterpreterOptions};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let source = std::fs::read_to_string("swap-loop.wir")?;
+    let module = parse_module(&source)?;
+    let options = InterpreterOptions {
+        max_steps: 100,
+        ..InterpreterOptions::default()
+    };
+    let result = interpret_with_options(
+        &module, FunctionId(7), &[ConstValue::U(3)], options,
+    )?;
+    assert_eq!(result.value, Some(ConstValue::I(22)));
+    assert_eq!(result.steps, 32);
+    let stopped = interpret_with_options(
+        &module, FunctionId(7), &[ConstValue::U(3)],
+        InterpreterOptions { max_steps: 0, ..options },
+    );
+    assert!(matches!(stopped, Err(InterpreterError::StepLimit { .. })));
+    println!("i32 22");
+    Ok(())
+}
+```

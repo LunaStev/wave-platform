@@ -30,7 +30,7 @@ summary: Описывает целочисленные операции wrap, ch
 
 ### Wrap и IR выражают явную проверку
 
-Следующие модули настроены как Rust builder и представляют собой текущие выходные данные принтера, прошедшие проверку. Анализатор текста и механизм выполнения пока недоступны.
+Сохраните полный модуль формата 3 как `integer-operations.wir`: текстовый читатель принимает его, скалярный интерпретатор исполняет.
 
 ```text
 module {
@@ -41,6 +41,10 @@ module {
 
   declare @f0 "add_u8": whale () -> u8, linkage internal
   declare @f1 "require_no_overflow": whale () -> u8, linkage internal
+
+  declare @f2 "minimum_division": whale () -> i8, linkage internal
+  declare @f3 "minimum_remainder": whale () -> i8, linkage internal
+  declare @f4 "negative_shift": whale () -> i8, linkage internal
 
   fn @f0 "add_u8"() -> u8, entry %b0 {
   %b0 "entry":
@@ -61,10 +65,58 @@ module {
     ret u8 %v6
   }
 
+  fn @f2 "minimum_division"() -> i8, entry %b0 {
+  %b0 "entry":
+    %v0: i8 = const i8 -128
+    %v1: i8 = const i8 -1
+    %v2: i8 = sdiv i8 %v0, %v1
+    ret i8 %v2
+  }
+
+  fn @f3 "minimum_remainder"() -> i8, entry %b0 {
+  %b0 "entry":
+    %v0: i8 = const i8 -128
+    %v1: i8 = const i8 -1
+    %v2: i8 = srem i8 %v0, %v1
+    ret i8 %v2
+  }
+
+  fn @f4 "negative_shift"() -> i8, entry %b0 {
+  %b0 "entry":
+    %v0: i8 = const i8 -1
+    %v1: i8 = const i8 -1
+    %v2: i8 = shl i8 %v0, %v1
+    ret i8 %v2
+  }
+
 }
 ```
 
-В соответствии с арифметическим контрактом `add_u8` преобразует 256 в 8-битный результат 0. `require_no_overflow` извлекает завернутый результат с помощью `extract ..., 0` и флага переполнения Bool с помощью `extract ..., 1`. Если флаг true, `trap_if` останавливает выполнение перед возвратом. Это указанные результаты, а не вывод реализованного интерпретатора.
+`add_u8` возвращает 0, младшие восемь бит числа 256. `minimum_division` возвращает −128, `minimum_remainder` — 0. `negative_shift` трактует −1 как unsigned count 255, затем использует 255 mod 8 = 7. Запускайте по явному ID:
+
+```shell
+whale ir run integer-operations.wir --function @f0
+whale ir run integer-operations.wir --function @f2
+whale ir run integer-operations.wir --function @f3
+whale ir run integer-operations.wir --function @f4
+```
+
+```text
+u8 0
+i8 -128
+i8 0
+i8 -128
+```
+
+`require_no_overflow` извлекает обёрнутый результат по индексу 0 и флаг overflow Bool по индексу 1. Явный trap_if останавливает перед возвратом. Команда завершится со статусом 1 и выведет диагностику в stderr:
+
+```shell
+whale ir run integer-operations.wir --function @f1
+```
+
+```text
+Error: integer-operations.wir: trap at @f1 %b1 instruction 5: "integer overflow" (after 6 steps)
+```
 
 ## Деление и остаток
 

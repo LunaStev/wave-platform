@@ -71,3 +71,16 @@ cargo run -p whale --features socket-cli -- ir lower program.json -o program.wir
 `ir lower` membaca JSON dari Whale socket schema, mengubahnya menjadi Whale IR, dan memverifikasi modul. Teks IR dikeluarkan ke jalur stdout atau `-o`. `--target <triple>` menggantikan string target dan `--no-verify` menghilangkan validasi.
 
 Build dengan `socket-cli` untuk memakai `ir lower`. Produsen Socket JSON dan Whale harus memakai AST schema version yang sama.
+
+
+## Interpreter bilangan bulat skalar
+
+Build bawaan juga menjalankan IR integer/Bool skalar. `--function @fN` wajib; ulangi `--arg` untuk argumen desimal tepat atau true/false bagi Bool. `--max-steps` menghitung instruksi dan terminator dengan nilai bawaan 1,000,000. run tidak menerima -o atau --no-verify. Simpan loop lengkap dari [referensi IR](ir-reference) sebagai `swap-loop.wir`:
+
+```shell
+whale ir run swap-loop.wir --function @f7 --arg 3 --max-steps 100
+```
+
+```text
+i32 22
+```

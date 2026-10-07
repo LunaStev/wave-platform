@@ -61,7 +61,7 @@ module {
 }
 ```
 
-`%v0`和`%v1`是常量i32的定义。使用`add`定义的`%v2`作为函数i32的返回值。如果将返回值改为Bool，则会因为与函数签名不匹配而导致验证错误。即使两个操作数都是常量，O0 仍保留加法指令。
+将输出保存为 `answer.wir`，即可用文本解析器或 CLI 读取并验证。下面介绍标量整数执行。
 
 将上面的输出保存为 `answer.wir`，即可用文本解析器和 CLI 读取并验证。尚不支持执行 IR。
 
@@ -198,9 +198,9 @@ Select 选择已计算的值之一。它不会忽略任一输入的计算。例�
 
 ## 验证部trap
 
-无效的IR将在验证阶段被拒绝。执行条件违规通过定义的 trap 进行处理，`undef` 和 `poison` 不是可接受的值。误用builder、重复定义、添加第二个terminator 应作为结构错误返回。
+非法 IR 在验证阶段拒绝。解释器支持子集中的执行条件违规会产生定义好的 trap。为兼容现有 lowering，解析器和验证器仍保留 legacy `undef`，但解释器显式拒绝它；不会把未初始化存储变成 0。初始化跟踪尚未完成。builder 错误与执行 trap 分开处理。
 
-trap 包含原因·源位置·IR ID 然后停止执行。运行native终止程序，解释器API返回错误Trap。保留以前的副作用，但不保证缓冲区flush·析构函数调用·堆栈unwinding。
+当前 `InterpreterTrap` 报告原因、已执行步数与 `ExecutionSite`：函数 ID、块 ID、从 0 开始的指令索引及可选结果值 ID。terminator 的索引紧接指令序列。CLI 诊断还显示输入文件。typed IR 尚无源码 span，因此这是 IR 位置而非源码行号。trap 返回错误并停止后续执行；库不会终止宿主进程。
 
 此保证适用于经过验证的IR 和跟踪内存。外部C·原始地址·内联汇编具有单独的契约，并且并不总是检测其边界之外的违规行为。请参阅[内存模型](memory-model)。
 
@@ -290,7 +290,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-还可向 `verify_module_with_limits`、`ConstExpr::evaluate_with_limits`、`validate_signature_with_limits` 和 `ModuleBuilder::declare_function_with_limits` 传入限制。在递归 clone、比较和诊断之前迭代遍历类型；常量表达式用工作栈求值。借用的 Rust 树及其 Drop 仍由调用者管理。任意未验证树的 clone/Drop 仍是递归的；checked 声明 API 拒绝的自有签名会迭代释放。为兼容现有 lowering，读取器保留 legacy `undef`。初始化跟踪、运行时 trap、指针元数据和 native 执行仍是单独的未完成能力。
+还可向 `verify_module_with_limits`、`ConstExpr::evaluate_with_limits`、`validate_signature_with_limits` 和 `ModuleBuilder::declare_function_with_limits` 传入限制。在递归 clone、比较和诊断之前迭代遍历类型；常量表达式用工作栈求值。借用的 Rust 树及其 Drop 仍由调用者管理。任意未验证树的 clone/Drop 仍是递归的；checked 声明 API 拒绝的自有签名会迭代释放。为兼容现有 lowering，读取器保留 legacy `undef`。初始化跟踪、内存访问检查、指针元数据和 native 执行仍是单独的未完成能力。
 
 ### 指定版本 AST JSON
 
@@ -392,3 +392,80 @@ Failed to parse socket JSON: unsupported AST format_version 99; expected 2
 ```
 
 该命令以非零状态退出，并且不会创建新的输出或覆盖现有文件。在发布输出之前，类型不匹配也会失败。没有 `socket-cli` 构建的二进制文件以状态 2 退出并输出包含 `--features socket-cli` 的恢复命令。
+
+
+## 标量整数解释器
+
+默认构建执行已验证的 Whale 调用约定函数，参数为整数或 Bool，返回整数、Bool 或 void。支持常量与常量声明、mov、整数运算与比较、整数 cast、checked 对与 extract、select、phi、分支、switch、return、trap_if 和 trap。不支持执行内存、float、调用、地址、一般 aggregate 和 legacy `undef`。先验证整个模块；所选函数的每个块，包括不可达块，都必须属于该子集。其他函数只需通过验证。目前还不能执行使用内存的 Wave lowering 示例。
+
+`InterpreterOptions::max_steps` 默认为 1,000,000。每条执行指令（包括 phi）与每个 terminator 各消耗一步。限制为 0 时在首个操作前停止；无限分支循环返回 `InterpreterError::StepLimit`。`ir_limits` 单独限制验证工作量。未使用的算术也会执行并可能 trap。checked overflow 是 Bool 结果，只有显式 trap_if 才使其 trap。
+
+将此完整模块保存为 `swap-loop.wir`。即使退出块存储在前面，入口块仍被显式指定。进入块时，先从前一个块的值读取全部 phi 输入，再一次性写入结果。三次循环交换 11 和 22 三次，返回 22。
+
+```text
+module {
+  format_version 3
+  semantics_version 1
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  declare @f7 "swap_loop": whale (u32) -> i32, linkage internal
+
+  fn @f7 "swap_loop"(%v0 "iterations": u32) -> i32, entry %b11 {
+  %b90 "exit":
+    ret i32 %v5
+  %b11 "entry":
+    %v1: i32 = const i32 11
+    %v2: i32 = const i32 22
+    %v3: u32 = const u32 0
+    %v4: u32 = const u32 1
+    br label %b20
+  %b20 "loop":
+    %v5: i32 = phi i32 [ %v1, %b11 ], [ %v6, %b30 ]
+    %v6: i32 = phi i32 [ %v2, %b11 ], [ %v5, %b30 ]
+    %v7: u32 = phi u32 [ %v3, %b11 ], [ %v9, %b30 ]
+    %v8: bool = icmp ult u32 %v7, %v0
+    cbr bool %v8, label %b30, label %b90
+  %b30 "next":
+    %v9: u32 = add u32 %v7, %v4
+    br label %b20
+  }
+
+}
+```
+
+```shell
+whale ir run swap-loop.wir --function @f7 --arg 3 --max-steps 100
+```
+
+```text
+i32 22
+```
+
+Rust API 返回值与步数，或结构化的验证、不支持操作、参数、步数限制或 trap 错误。此完整程序读取同一个 `swap-loop.wir` 文件。
+
+```rust
+use ir::{interpret_with_options, parse_module, ConstValue, FunctionId,
+         InterpreterError, InterpreterOptions};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let source = std::fs::read_to_string("swap-loop.wir")?;
+    let module = parse_module(&source)?;
+    let options = InterpreterOptions {
+        max_steps: 100,
+        ..InterpreterOptions::default()
+    };
+    let result = interpret_with_options(
+        &module, FunctionId(7), &[ConstValue::U(3)], options,
+    )?;
+    assert_eq!(result.value, Some(ConstValue::I(22)));
+    assert_eq!(result.steps, 32);
+    let stopped = interpret_with_options(
+        &module, FunctionId(7), &[ConstValue::U(3)],
+        InterpreterOptions { max_steps: 0, ..options },
+    );
+    assert!(matches!(stopped, Err(InterpreterError::StepLimit { .. })));
+    println!("i32 22");
+    Ok(())
+}
+```

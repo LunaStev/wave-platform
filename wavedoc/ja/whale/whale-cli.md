@@ -71,3 +71,16 @@ cargo run -p whale --features socket-cli -- ir lower program.json -o program.wir
 `ir lower`はWhalesocketschemaのJSONを読み、WhaleIRテキストIRはstdoutまたは`-o`パスに出力されます。 `--target <triple>`はターゲット文字列を置き換え、`--no-verify`は検証を省略します。
 
 `ir lower` を使うには `socket-cli` でビルドしてください。Socket JSON の生成側と Whale は同じ AST schema version を使う必要があります。
+
+
+## スカラー整数インタプリタ
+
+デフォルトビルドはスカラー整数・Bool IR も実行します。`--function @fN` は必須で、`--arg` を繰り返して正確な十進引数を渡します。Bool は true/false です。`--max-steps` は命令と terminator を数え、既定値は 1,000,000 です。run では -o と --no-verify は使えません。[IR 参照](ir-reference)の完全なループを `swap-loop.wir` に保存してください。
+
+```shell
+whale ir run swap-loop.wir --function @f7 --arg 3 --max-steps 100
+```
+
+```text
+i32 22
+```

@@ -61,7 +61,7 @@ module {
 }
 ```
 
-`%v0` y `%v1` son definiciones de la constante i32. Utilice `%v2` definido por `add` como valor de retorno de i32 de la función. Si cambia el valor de retorno a Bool, provocará un error de verificación porque no coincide con la firma de la función. Incluso si ambos operandos son constantes, O0 mantiene la instrucción de suma.
+Guarde la salida como `answer.wir` para leerla y verificarla con el parser o CLI. La ejecución entera escalar se explica abajo.
 
 Guarde la salida como `answer.wir` para leerla y verificarla con el analizador de texto y la CLI. La ejecución de IR aún no está disponible.
 
@@ -198,9 +198,9 @@ Select selecciona uno de los valores ya calculados. No omite el cálculo de ning
 
 ## Departamento de Verificación trap
 
-El IR no válido será rechazado durante la etapa de verificación. Las violaciones de las condiciones de ejecución se manejan con el trap definido, y `undef` y `poison` no son valores aceptables. El uso indebido de builder, la definición duplicada y la adición de un segundo terminator deben devolverse como un error estructural.
+El IR incorrecto se rechaza en la verificación. Las condiciones de ejecución del subconjunto admitido producen traps definidos. El parser/verificador conserva legacy `undef` por compatibilidad con lowering existente, pero el intérprete lo rechaza explícitamente; no convierte memoria sin inicializar en cero. El seguimiento de inicialización sigue pendiente. Los errores del builder son distintos de los traps de ejecución.
 
-trap contiene el motivo·ubicación de origen·IR ID y luego detiene la ejecución. Ejecutar native finaliza el programa y el intérprete API devuelve el error Trap. Conserva los efectos secundarios anteriores, pero no garantiza el buffer flush·destructor call·stack unwinding.
+`InterpreterTrap` informa del motivo, pasos ejecutados y `ExecutionSite`: ID de función, ID de bloque, índice de instrucción desde cero e ID opcional del resultado. El terminator sigue a las instrucciones. El CLI indica también el archivo. El IR aún no lleva spans de fuente: son posiciones IR, no números de línea. El trap devuelve un error y detiene la ejecución posterior; la biblioteca no aborta el proceso anfitrión.
 
 Esta garantía se aplica a la IR verificada y a la memoria de seguimiento. Externo C·dirección sin formato·el ensamblaje en línea tiene un contrato separado y no siempre detecta violaciones fuera de sus límites. Consulte [Modelo de memoria](memory-model).
 
@@ -290,7 +290,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-También puede pasar límites a `verify_module_with_limits`, `ConstExpr::evaluate_with_limits`, `validate_signature_with_limits` y `ModuleBuilder::declare_function_with_limits`. El recorrido iterativo precede al clone, comparación y diagnóstico recursivos; las constantes se evalúan con una pila de trabajo. Los árboles Rust prestados y su Drop siguen siendo responsabilidad del llamador. Los árboles arbitrarios no verificados conservan clone/Drop recursivos; la firma propia rechazada por la API de declaración checked se libera iterativamente. El lector conserva legacy `undef` para compatibilidad con lowering existente. El seguimiento de inicialización, traps de ejecución, metadatos de punteros y ejecución native siguen pendientes por separado.
+También puede pasar límites a `verify_module_with_limits`, `ConstExpr::evaluate_with_limits`, `validate_signature_with_limits` y `ModuleBuilder::declare_function_with_limits`. El recorrido iterativo precede al clone, comparación y diagnóstico recursivos; las constantes se evalúan con una pila de trabajo. Los árboles Rust prestados y su Drop siguen siendo responsabilidad del llamador. Los árboles arbitrarios no verificados conservan clone/Drop recursivos; la firma propia rechazada por la API de declaración checked se libera iterativamente. El lector conserva legacy `undef` para compatibilidad con lowering existente. El seguimiento de inicialización, comprobaciones de acceso a memoria, metadatos de punteros y ejecución native siguen pendientes por separado.
 
 ### Versión especificada AST JSON
 
@@ -392,3 +392,80 @@ Failed to parse socket JSON: unsupported AST format_version 99; expected 2
 ```
 
 El comando sale con un estado distinto de cero y no crea nuevos resultados ni sobrescribe archivos existentes. Las discrepancias de tipos también fallarán antes de publicar el resultado. Los binarios creados sin `socket-cli` salen con estado 2 y generan un comando de recuperación que contiene `--features socket-cli`.
+
+
+## Intérprete de enteros escalares
+
+La compilación predeterminada ejecuta una función verificada con convención Whale, parámetros enteros/Bool y retorno entero/Bool o void. Admite constantes y declaraciones constantes, mov, aritmética y comparaciones enteras, casts enteros, pares checked y extract, select, phi, ramas, switch, return, trap_if y trap. Memoria, float, llamadas, direcciones, agregados generales y legacy `undef` no se ejecutan. Se verifica todo el módulo; todos los bloques de la función elegida, incluso los inalcanzables, deben pertenecer al subconjunto. Las otras funciones solo necesitan pasar la verificación. Los ejemplos de lowering de Wave que usan memoria aún no se ejecutan.
+
+`InterpreterOptions::max_steps` vale 1,000,000 por defecto. Cada instrucción ejecutada, incluida phi, y cada terminator consumen un paso. Cero detiene antes de la primera operación; un bucle infinito devuelve `InterpreterError::StepLimit`. `ir_limits` limita la verificación por separado. La aritmética sin usos también se ejecuta y puede producir trap. El overflow checked es un resultado Bool; solo un trap_if explícito lo convierte en trap.
+
+Guarde este módulo completo como `swap-loop.wir`. La entrada es explícita aunque la salida se almacene primero. Al entrar en un bloque, se leen todos los operandos phi del bloque anterior antes de escribir ningún resultado phi. Tres iteraciones intercambian 11 y 22 tres veces y devuelven 22.
+
+```text
+module {
+  format_version 3
+  semantics_version 1
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  declare @f7 "swap_loop": whale (u32) -> i32, linkage internal
+
+  fn @f7 "swap_loop"(%v0 "iterations": u32) -> i32, entry %b11 {
+  %b90 "exit":
+    ret i32 %v5
+  %b11 "entry":
+    %v1: i32 = const i32 11
+    %v2: i32 = const i32 22
+    %v3: u32 = const u32 0
+    %v4: u32 = const u32 1
+    br label %b20
+  %b20 "loop":
+    %v5: i32 = phi i32 [ %v1, %b11 ], [ %v6, %b30 ]
+    %v6: i32 = phi i32 [ %v2, %b11 ], [ %v5, %b30 ]
+    %v7: u32 = phi u32 [ %v3, %b11 ], [ %v9, %b30 ]
+    %v8: bool = icmp ult u32 %v7, %v0
+    cbr bool %v8, label %b30, label %b90
+  %b30 "next":
+    %v9: u32 = add u32 %v7, %v4
+    br label %b20
+  }
+
+}
+```
+
+```shell
+whale ir run swap-loop.wir --function @f7 --arg 3 --max-steps 100
+```
+
+```text
+i32 22
+```
+
+La API Rust devuelve valor y pasos, o un error estructurado de verificación, operación no admitida, argumentos, límite o trap. Este programa completo lee el mismo archivo `swap-loop.wir`:
+
+```rust
+use ir::{interpret_with_options, parse_module, ConstValue, FunctionId,
+         InterpreterError, InterpreterOptions};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let source = std::fs::read_to_string("swap-loop.wir")?;
+    let module = parse_module(&source)?;
+    let options = InterpreterOptions {
+        max_steps: 100,
+        ..InterpreterOptions::default()
+    };
+    let result = interpret_with_options(
+        &module, FunctionId(7), &[ConstValue::U(3)], options,
+    )?;
+    assert_eq!(result.value, Some(ConstValue::I(22)));
+    assert_eq!(result.steps, 32);
+    let stopped = interpret_with_options(
+        &module, FunctionId(7), &[ConstValue::U(3)],
+        InterpreterOptions { max_steps: 0, ..options },
+    );
+    assert!(matches!(stopped, Err(InterpreterError::StepLimit { .. })));
+    println!("i32 22");
+    Ok(())
+}
+```

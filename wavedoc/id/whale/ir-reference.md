@@ -61,7 +61,7 @@ module {
 }
 ```
 
-`%v0` dan `%v1` adalah definisi konstanta i32. Gunakan `%v2` yang didefinisikan oleh `add` sebagai nilai kembalian i32 dari fungsi tersebut. Jika Anda mengubah nilai kembalian menjadi Bool, ini akan menyebabkan kesalahan verifikasi karena tidak cocok dengan tanda tangan fungsi. Meskipun kedua operan adalah konstanta, O0 mempertahankan instruksi penjumlahan.
+Simpan keluaran sebagai `answer.wir` untuk dibaca dan diverifikasi melalui parser teks atau CLI. Eksekusi integer skalar dijelaskan di bawah.
 
 Simpan keluaran sebagai `answer.wir` untuk dibaca dan diverifikasi dengan parser teks dan CLI. Eksekusi IR belum tersedia.
 
@@ -198,9 +198,9 @@ Select memilih salah satu nilai yang sudah dihitung. Itu tidak menghilangkan per
 
 ## Departemen Verifikasi trap
 
-IR yang tidak valid akan ditolak pada tahap verifikasi. Pelanggaran kondisi eksekusi ditangani dengan trap yang ditentukan, dan `undef` dan `poison` bukanlah nilai yang dapat diterima. Penyalahgunaan builder, definisi duplikat, penambahan terminator kedua harus dikembalikan sebagai kesalahan struktural.
+IR yang salah ditolak saat verifikasi. Pelanggaran kondisi eksekusi subset yang didukung menghasilkan trap terdefinisi. Parser/verifikator mempertahankan legacy `undef` untuk kompatibilitas lowering, tetapi interpreter menolaknya secara eksplisit; penyimpanan belum diinisialisasi tidak dijadikan nol. Pelacakan inisialisasi belum selesai. Error builder terpisah dari trap eksekusi.
 
-trap berisi alasan·lokasi sumber·IR ID dan kemudian menghentikan eksekusi. Jalankan native menghentikan program, dan juru bahasa API mengembalikan kesalahan Trap. Mempertahankan efek samping sebelumnya, tetapi tidak menjamin buffer flush·panggilan destruktor·stack unwinding.
+`InterpreterTrap` melaporkan alasan, langkah yang dijalankan dan `ExecutionSite`: ID fungsi, ID blok, indeks instruksi mulai nol dan ID hasil opsional. Indeks terminator berada setelah instruksi. CLI juga menyebut file masukan. Typed IR belum memiliki span sumber, jadi ini lokasi IR, bukan nomor baris sumber. Trap mengembalikan error dan menghentikan eksekusi selanjutnya; pustaka tidak menghentikan proses host.
 
 Jaminan ini berlaku untuk IR terverifikasi dan memori penelusuran. Eksternal C·alamat mentah·perakitan inline memiliki kontrak terpisah dan tidak selalu mendeteksi pelanggaran di luar batasannya. Silakan merujuk ke [Model memori](memory-model).
 
@@ -290,7 +290,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-Batas juga dapat diberikan kepada `verify_module_with_limits`, `ConstExpr::evaluate_with_limits`, `validate_signature_with_limits` dan `ModuleBuilder::declare_function_with_limits`. Traversal tipe iteratif mendahului clone, perbandingan dan diagnostik rekursif; konstanta dievaluasi dengan stack kerja. Pohon Rust yang dipinjam beserta Drop tetap dimiliki pemanggil. Pohon sembarang yang belum diverifikasi masih memiliki clone/Drop rekursif; signature milik API deklarasi checked yang ditolak dibuang iteratif. Pembaca mempertahankan legacy `undef` untuk kompatibilitas lowering yang ada. Pelacakan inisialisasi, trap runtime, metadata pointer dan eksekusi native tetap merupakan fitur terpisah yang belum selesai.
+Batas juga dapat diberikan kepada `verify_module_with_limits`, `ConstExpr::evaluate_with_limits`, `validate_signature_with_limits` dan `ModuleBuilder::declare_function_with_limits`. Traversal tipe iteratif mendahului clone, perbandingan dan diagnostik rekursif; konstanta dievaluasi dengan stack kerja. Pohon Rust yang dipinjam beserta Drop tetap dimiliki pemanggil. Pohon sembarang yang belum diverifikasi masih memiliki clone/Drop rekursif; signature milik API deklarasi checked yang ditolak dibuang iteratif. Pembaca mempertahankan legacy `undef` untuk kompatibilitas lowering yang ada. Pelacakan inisialisasi, pemeriksaan akses memori, metadata pointer dan eksekusi native tetap merupakan fitur terpisah yang belum selesai.
 
 ### Versi yang ditentukan AST JSON
 
@@ -392,3 +392,80 @@ Failed to parse socket JSON: unsupported AST format_version 99; expected 2
 ```
 
 Perintah keluar dengan status bukan nol dan tidak membuat keluaran baru atau menimpa file yang sudah ada. Jenis ketidakcocokan juga akan gagal sebelum menerbitkan keluaran. Biner dibuat tanpa keluar `socket-cli` dengan status 2 dan mengeluarkan perintah pemulihan yang berisi `--features socket-cli`.
+
+
+## Interpreter bilangan bulat skalar
+
+Build bawaan menjalankan fungsi terverifikasi dengan konvensi Whale, parameter integer/Bool dan hasil integer/Bool atau void. Mendukung konstanta dan deklarasi konstanta, mov, aritmetika dan perbandingan integer, cast integer, pasangan checked dan extract, select, phi, cabang, switch, return, trap_if dan trap. Memori, float, panggilan, alamat, aggregate umum dan legacy `undef` tidak dapat dijalankan. Seluruh modul diverifikasi dahulu; semua blok fungsi yang dipilih, termasuk yang tidak terjangkau, harus berada dalam subset. Fungsi lain hanya perlu lolos verifikasi. Contoh lowering Wave yang memakai memori belum dapat dijalankan.
+
+Nilai bawaan `InterpreterOptions::max_steps` adalah 1,000,000. Setiap instruksi yang dijalankan, termasuk phi, dan setiap terminator menghabiskan satu langkah. Nol berhenti sebelum operasi pertama; loop tanpa akhir mengembalikan `InterpreterError::StepLimit`. `ir_limits` membatasi verifikasi secara terpisah. Aritmetika tanpa penggunaan tetap dijalankan dan dapat trap. Overflow checked adalah hasil Bool; hanya trap_if eksplisit yang menjadikannya trap.
+
+Simpan modul lengkap ini sebagai `swap-loop.wir`. Entry tetap eksplisit meskipun blok keluar disimpan pertama. Saat memasuki blok, semua input phi dibaca dari nilai blok sebelumnya sebelum hasil phi ditulis bersama. Tiga iterasi menukar 11 dan 22 tiga kali dan mengembalikan 22.
+
+```text
+module {
+  format_version 3
+  semantics_version 1
+  target "x86_64-whale-linux"
+  datalayout { ptr=64, endian=little }
+
+  declare @f7 "swap_loop": whale (u32) -> i32, linkage internal
+
+  fn @f7 "swap_loop"(%v0 "iterations": u32) -> i32, entry %b11 {
+  %b90 "exit":
+    ret i32 %v5
+  %b11 "entry":
+    %v1: i32 = const i32 11
+    %v2: i32 = const i32 22
+    %v3: u32 = const u32 0
+    %v4: u32 = const u32 1
+    br label %b20
+  %b20 "loop":
+    %v5: i32 = phi i32 [ %v1, %b11 ], [ %v6, %b30 ]
+    %v6: i32 = phi i32 [ %v2, %b11 ], [ %v5, %b30 ]
+    %v7: u32 = phi u32 [ %v3, %b11 ], [ %v9, %b30 ]
+    %v8: bool = icmp ult u32 %v7, %v0
+    cbr bool %v8, label %b30, label %b90
+  %b30 "next":
+    %v9: u32 = add u32 %v7, %v4
+    br label %b20
+  }
+
+}
+```
+
+```shell
+whale ir run swap-loop.wir --function @f7 --arg 3 --max-steps 100
+```
+
+```text
+i32 22
+```
+
+API Rust mengembalikan nilai dan jumlah langkah atau error terstruktur untuk verifikasi, operasi tidak didukung, argumen, batas langkah atau trap. Program lengkap ini membaca file `swap-loop.wir` yang sama:
+
+```rust
+use ir::{interpret_with_options, parse_module, ConstValue, FunctionId,
+         InterpreterError, InterpreterOptions};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let source = std::fs::read_to_string("swap-loop.wir")?;
+    let module = parse_module(&source)?;
+    let options = InterpreterOptions {
+        max_steps: 100,
+        ..InterpreterOptions::default()
+    };
+    let result = interpret_with_options(
+        &module, FunctionId(7), &[ConstValue::U(3)], options,
+    )?;
+    assert_eq!(result.value, Some(ConstValue::I(22)));
+    assert_eq!(result.steps, 32);
+    let stopped = interpret_with_options(
+        &module, FunctionId(7), &[ConstValue::U(3)],
+        InterpreterOptions { max_steps: 0, ..options },
+    );
+    assert!(matches!(stopped, Err(InterpreterError::StepLimit { .. })));
+    println!("i32 22");
+    Ok(())
+}
+```
