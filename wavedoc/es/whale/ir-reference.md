@@ -63,7 +63,7 @@ module {
 
 `%v0` y `%v1` son definiciones de la constante i32. Utilice `%v2` definido por `add` como valor de retorno de i32 de la función. Si cambia el valor de retorno a Bool, provocará un error de verificación porque no coincide con la firma de la función. Incluso si ambos operandos son constantes, O0 mantiene la instrucción de suma.
 
-Este código es una salida de impresora real, no un archivo de entrada para pasar a un analizador de texto. El análisis de texto y la ejecución de IR aún no son compatibles; actualmente este módulo se puede configurar como Rust builder.
+Guarde la salida como `answer.wir` para leerla y verificarla con el analizador de texto y la CLI. La ejecución de IR aún no está disponible.
 
 ## tipo
 
@@ -210,8 +210,7 @@ AST y typed IR utilizan el format version respectivo y el semantics version com�
 
 Los números enteros se pasan como ancho de bits·signedness·números de cadena. Las constantes de punto flotante se pasan como una cadena de bits exacta y de ancho. El texto round-trip en IR debe conservar el nombre·ID·tipo·constante·secuencia·propiedad·metadatos. Los espacios y la ubicación de comentarios no están sujetos a conservación.
 
-Puede utilizar los contratos escalares AST JSON que aparecen a continuación. La salida typed IR incluye información de la versión, pero aún no se admite el intercambio completo de ida y vuelta con el analizador de texto.
-
+Están disponibles el contrato AST JSON siguiente y la lectura, verificación e impresión de ida y vuelta de typed IR format 3.
 
 ### Identidades impresas y nombres entre comillas
 
@@ -253,7 +252,45 @@ Todos los nombres y cadenas usan comillas dobles: destino, nombres de funciones,
 "line\ncolumn\tquote\"slash\\한글"
 ```
 
-Las definiciones impresas en formato 2 deben migrarse a ID explícitos, ID de parámetros, nombres entre comillas y una referencia de entrada. Solo cambia la sintaxis de typed IR; AST JSON conserva el formato 2 y semantics version sigue siendo 1. El analizador de texto y el lector de ida y vuelta aún no están disponibles.
+La salida format 2 debe migrarse manualmente a IDs explícitos, IDs de parámetros, nombres entre comillas y una referencia de entrada. El lector solo acepta format 3 con semantics version 1 y no convierte format 2 automáticamente. AST JSON format 2 tiene un contrato independiente.
+
+### Lectura y verificación de IR textual
+
+`ir::parse_module` lee typed IR, lo verifica y devuelve un `Module`. Acepta la sintaxis actual del impresor para escalares, control de flujo, memoria, llamadas directas/indirectas y expresiones constantes. Conserva IDs, nombres, tipos, enteros y bits float exactos, árboles de expresiones y resultados evaluados, orden de bloques, entrada, alineación, firmas y link_name. Los espacios y comentarios de línea `//` se normalizan. Guarde el IR completo anterior como `answer.wir` y ejecute estos comandos con la compilación predeterminada.
+
+```sh
+cargo run --locked -- ir verify answer.wir
+cargo run --locked -- ir print answer.wir -o canonical.wir
+```
+
+Se rechazan versiones, campos, instrucciones y escapes desconocidos, literales fuera de rango, IDs duplicados, anotaciones de tipo contradictorias y entrada sobrante. `ParseError` indica el desplazamiento en bytes y la línea/columna de escalares Unicode desde 1. Los errores de verificación se ubican en la función o declaración global correspondiente cuando es posible. `print` también verifica y conserva la salida existente si falla. La nueva sintaxis o semántica requiere cambiar la format/semantics version correspondiente; las versiones desconocidas son errores.
+
+### Límites de recursos de verificación
+
+Los valores predeterminados de `IrLimits` son 8 MiB de entrada, 1,000,000 tokens, 1,000,000 nodos de recorrido y profundidades de tipos y expresiones de 128. La raíz tiene profundidad 0 y cada hijo suma 1. Pueden reducirse o elevarse hasta `MAX_IR_NESTING`, 256. Los excesos devuelven `LimitError`, `VerifyError::ResourceLimit`, `ConstEvalError::ResourceLimit` o `CallError::ResourceLimit`. Los nodos cuentan el recorrido en cada límite de entrada, incluidas las anotaciones y expresiones, no el tiempo transcurrido.
+
+```rust
+use ir::{parse_module_with_limits, print_module, IrLimits};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let source = std::fs::read_to_string("answer.wir")?;
+    let limits = IrLimits {
+        max_type_depth: 32,
+        max_const_depth: 32,
+        max_nodes: 10_000,
+        ..IrLimits::default()
+    };
+    let module = parse_module_with_limits(&source, limits)?;
+    let canonical = print_module(&module);
+    let reread = parse_module_with_limits(&canonical, limits)?;
+    assert_eq!(print_module(&reread), canonical);
+    let invalid = source.replacen("format_version 3", "format_version 99", 1);
+    assert!(parse_module_with_limits(&invalid, limits).is_err());
+    Ok(())
+}
+```
+
+También puede pasar límites a `verify_module_with_limits`, `ConstExpr::evaluate_with_limits`, `validate_signature_with_limits` y `ModuleBuilder::declare_function_with_limits`. El recorrido iterativo precede al clone, comparación y diagnóstico recursivos; las constantes se evalúan con una pila de trabajo. Los árboles Rust prestados y su Drop siguen siendo responsabilidad del llamador. Los árboles arbitrarios no verificados conservan clone/Drop recursivos; la firma propia rechazada por la API de declaración checked se libera iterativamente. El lector conserva legacy `undef` para compatibilidad con lowering existente. El seguimiento de inicialización, traps de ejecución, metadatos de punteros y ejecución native siguen pendientes por separado.
 
 ### Versión especificada AST JSON
 

@@ -50,9 +50,18 @@ whale object input.bin -o output.o
 
 The `object` command places raw bytes in an ELF64 `.text` section and adds a global `start` symbol at offset 0. It wraps raw machine code in an ELF object file.
 
+## Typed text IR verification and printing
+
+The default build reads and verifies format 3 typed IR. Save the complete example in the [IR reference](ir-reference) as `answer.wir`. `print` verifies before canonical printing and preserves existing output on failure. It does not execute IR or generate native code.
+
+```shell
+whale ir verify answer.wir
+whale ir print answer.wir -o canonical.wir
+```
+
 ## Optional IR socket
 
-The `ir` command is only included when Whale is built with the `socket-cli` feature.
+AST JSON `ir lower` requires the `socket-cli` feature. Text IR `verify` and `print` do not.
 
 ```shell
 cargo run -p whale --features socket-cli -- ir lower program.json
@@ -61,4 +70,4 @@ cargo run -p whale --features socket-cli -- ir lower program.json -o program.wir
 
 `ir lower` reads JSON of Whale socket schema, converts it to Whale IR, and verifies the module. The text IR is output to the path stdout or `-o`. `--target <triple>` replaces the target string and `--no-verify` omits validation.
 
-To use the IR command, Whale must be built with the `socket-cli` feature. Socket JSON producers and Whale must use the same socket schema version.
+Build with `socket-cli` to use `ir lower`. Socket JSON producers and Whale must use the same AST schema version.

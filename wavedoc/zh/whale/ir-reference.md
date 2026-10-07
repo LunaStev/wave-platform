@@ -63,7 +63,7 @@ module {
 
 `%v0`和`%v1`是常量i32的定义。使用`add`定义的`%v2`作为函数i32的返回值。如果将返回值改为Bool，则会因为与函数签名不匹配而导致验证错误。即使两个操作数都是常量，O0 仍保留加法指令。
 
-此代码是实际的打印机输出，而不是传递给文本解析器的输入文件。尚不支持IR的文本解析和执行，目前该模块可以配置为Rustbuilder。
+将上面的输出保存为 `answer.wir`，即可用文本解析器和 CLI 读取并验证。尚不支持执行 IR。
 
 ## 类型
 
@@ -210,8 +210,7 @@ AST 和 typed IR 使用各自的 format version 和通用 semantics version。�
 
 整数作为位宽·signedness·字符串数字传递。浮点常量作为宽度和精确位字符串传递。 IR 中的文本round-trip 必须保留名称·ID·类型·常量·序列·属性·元数据。空格和评论位置不受保留。
 
-您可以使用下面的标量 AST JSON 合约。输出 typed IR 包含版本信息，但尚不支持与文本解析器的完整往返交换。
-
+可以使用下面的 AST JSON 契约以及 typed IR format 3 的读取、验证和往返打印。
 
 ### 输出标识符与带引号的名称
 
@@ -253,7 +252,45 @@ module {
 "line\ncolumn\tquote\"slash\\한글"
 ```
 
-format 2 的输出定义需要迁移到显式 ID、参数 ID、带引号的名称和入口引用。只有 typed IR 语法发生变化；AST JSON format 2 和 semantics version 1 保持不变。文本解析器和往返读取器仍不可用。
+format 2 输出必须手动迁移为显式 ID、参数 ID、带引号的名称和入口引用。读取器只接受 format 3 和 semantics version 1，不会自动转换 format 2。AST JSON format 2 是独立契约。
+
+### 读取并验证文本 IR
+
+`ir::parse_module` 读取 typed IR、验证后返回 `Module`。它接受当前打印器的标量、控制流、内存、直接/间接调用和常量表达式语法。保留 ID、名称、类型、精确整数和 float 位、表达式树与求值结果、基本块顺序、入口、对齐、签名和 link_name。空白与 `//` 行注释会整理为规范输出。将上面的完整 IR 保存为 `answer.wir`，在默认构建中运行以下命令。
+
+```sh
+cargo run --locked -- ir verify answer.wir
+cargo run --locked -- ir print answer.wir -o canonical.wir
+```
+
+未知版本、字段、指令、转义、越界字面量、重复 ID、冲突的类型标注和尾随输入都会被拒绝。`ParseError` 提供字节偏移以及从 1 开始的行和 Unicode scalar 列。验证错误尽可能定位到所属函数或全局声明。`print` 也验证输入，失败时保留已有输出。新增语法或语义需要更新相应的 format/semantics version；未知版本是错误。
+
+### 验证资源限制
+
+`IrLimits` 默认限制输入为 8 MiB、令牌为 1,000,000 个、遍历节点为 1,000,000 个，类型和表达式深度各为 128。根深度为 0，每个子节点增加 1。可降低深度或提高至 `MAX_IR_NESTING` 的 256。超限返回 `LimitError`、`VerifyError::ResourceLimit`、`ConstEvalError::ResourceLimit` 或 `CallError::ResourceLimit`。节点数量统计每个输入边界的遍历工作，包括类型标注和表达式节点，不是耗时限制。
+
+```rust
+use ir::{parse_module_with_limits, print_module, IrLimits};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let source = std::fs::read_to_string("answer.wir")?;
+    let limits = IrLimits {
+        max_type_depth: 32,
+        max_const_depth: 32,
+        max_nodes: 10_000,
+        ..IrLimits::default()
+    };
+    let module = parse_module_with_limits(&source, limits)?;
+    let canonical = print_module(&module);
+    let reread = parse_module_with_limits(&canonical, limits)?;
+    assert_eq!(print_module(&reread), canonical);
+    let invalid = source.replacen("format_version 3", "format_version 99", 1);
+    assert!(parse_module_with_limits(&invalid, limits).is_err());
+    Ok(())
+}
+```
+
+还可向 `verify_module_with_limits`、`ConstExpr::evaluate_with_limits`、`validate_signature_with_limits` 和 `ModuleBuilder::declare_function_with_limits` 传入限制。在递归 clone、比较和诊断之前迭代遍历类型；常量表达式用工作栈求值。借用的 Rust 树及其 Drop 仍由调用者管理。任意未验证树的 clone/Drop 仍是递归的；checked 声明 API 拒绝的自有签名会迭代释放。为兼容现有 lowering，读取器保留 legacy `undef`。初始化跟踪、运行时 trap、指针元数据和 native 执行仍是单独的未完成能力。
 
 ### 指定版本 AST JSON
 

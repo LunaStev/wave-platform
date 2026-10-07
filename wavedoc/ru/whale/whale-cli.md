@@ -50,9 +50,18 @@ whale object input.bin -o output.o
 
 Команда `object` помещает необработанные байты в секцию `.text` ELF64 и добавляет глобальный символ `start` со смещением 0. Она оборачивает необработанный машинный код в объектный файл ELF.
 
+## Проверка и печать текстового IR
+
+Стандартная сборка читает и проверяет typed IR format 3. Сохраните полный пример из [справочника IR](ir-reference) как `answer.wir`. `print` проверяет перед канонической печатью и при ошибке сохраняет прежний файл. Он не исполняет IR и не генерирует native код.
+
+```shell
+whale ir verify answer.wir
+whale ir print answer.wir -o canonical.wir
+```
+
 ## Дополнительно IR socket
 
-Команда `ir` включается только в том случае, если Whale собран с функцией `socket-cli`.
+Для AST JSON `ir lower` нужна feature `socket-cli`. Для текстового IR `verify` и `print` она не нужна.
 
 ```shell
 cargo run -p whale --features socket-cli -- ir lower program.json
@@ -61,4 +70,4 @@ cargo run -p whale --features socket-cli -- ir lower program.json -o program.wir
 
 `ir lower` считывает JSON из Whale socket schema, преобразует его в Whale IR и проверяет модуль. Текст IR выводится по пути stdout или `-o`. `--target <triple>` заменяет целевую строку, а `--no-verify` пропускает проверку.
 
-Чтобы использовать команду IR, Whale должен быть создан с функцией `socket-cli`. Производители Socket JSON и Whale должны использовать одни и те же socket schema version.
+Для `ir lower` соберите с `socket-cli`. Производители Socket JSON и Whale должны использовать одинаковую AST schema version.

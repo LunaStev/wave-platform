@@ -50,9 +50,18 @@ whale object input.bin -o output.o
 
 Perintah `object` menempatkan byte mentah di bagian ELF64 `.text` dan menambahkan simbol global `start` pada offset 0. Perintah ini membungkus kode mesin mentah dalam file objek ELF.
 
+## Verifikasi dan pencetakan IR teks
+
+Build bawaan membaca dan memverifikasi typed IR format 3. Simpan contoh lengkap di [referensi IR](ir-reference) sebagai `answer.wir`. `print` memverifikasi sebelum mencetak bentuk kanonis dan mempertahankan file lama jika gagal. Perintah ini tidak menjalankan IR atau menghasilkan kode native.
+
+```shell
+whale ir verify answer.wir
+whale ir print answer.wir -o canonical.wir
+```
+
 ## Opsional IR socket
 
-Perintah `ir` hanya disertakan ketika Whale dibuat dengan fitur `socket-cli`.
+AST JSON `ir lower` memerlukan feature `socket-cli`. IR teks `verify` dan `print` tidak memerlukannya.
 
 ```shell
 cargo run -p whale --features socket-cli -- ir lower program.json
@@ -61,4 +70,4 @@ cargo run -p whale --features socket-cli -- ir lower program.json -o program.wir
 
 `ir lower` membaca JSON dari Whale socket schema, mengubahnya menjadi Whale IR, dan memverifikasi modul. Teks IR dikeluarkan ke jalur stdout atau `-o`. `--target <triple>` menggantikan string target dan `--no-verify` menghilangkan validasi.
 
-Untuk menggunakan perintah IR, Whale harus dibuat dengan fitur `socket-cli`. Socket JSON produsen dan Whale harus menggunakan socket schema version yang sama.
+Build dengan `socket-cli` untuk memakai `ir lower`. Produsen Socket JSON dan Whale harus memakai AST schema version yang sama.
