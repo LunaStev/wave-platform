@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { Search } from '@lucide/vue'
-import { computed, ref, watch, watchEffect } from 'vue'
+import { ArrowLeft, ArrowRight, BookOpen, ChevronRight, List, Maximize2, Minimize2 } from '@lucide/vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import MarkdownContent from '../components/MarkdownContent.vue'
+import DocumentationTree from '../components/docs/DocumentationTree.vue'
 import { useI18n } from '../i18n'
 import { documentLocales, isDocumentLocale, saveDocumentLocale } from '../services/documentLocale'
 import { documentationCatalog, documentationPath, documentationProject, projectDocuments } from '../services/documentNavigation'
@@ -14,10 +15,14 @@ import UiSkeletonRows from '../ui/UiSkeletonRows.vue'
 
 const route = useRoute()
 const router = useRouter()
-const { locale, t } = useI18n()
+const { t } = useI18n()
 const documents = ref<DocumentSummary[]>([])
 const document = ref<DocumentView | null>(null)
 const query = ref('')
+const readingMode = ref(false)
+const article = ref<HTMLElement | null>(null)
+const mobileNavigation = ref<HTMLDetailsElement | null>(null)
+const activeHeading = ref('')
 const loading = ref(true)
 const failed = ref(false)
 const showingEnglishFallback = ref(false)
@@ -101,7 +106,31 @@ async function load() {
   }
 }
 
-watch([requestedPath, docLocale], () => { query.value = ''; void load() }, { immediate: true })
+watch([requestedPath, docLocale], () => {
+  query.value = ''
+  activeHeading.value = ''
+  if (mobileNavigation.value) mobileNavigation.value.open = false
+  void load()
+}, { immediate: true })
+
+let scrollFrame = 0
+function updateActiveHeading() {
+  const elements = article.value?.querySelectorAll<HTMLElement>('.document-content h2[id], .document-content h3[id], .document-content h4[id]')
+  if (!elements?.length) return
+  let selected = elements[0].id
+  for (const element of elements) {
+    if (element.getBoundingClientRect().top > 100) break
+    selected = element.id
+  }
+  activeHeading.value = selected
+}
+function onScroll() {
+  if (scrollFrame) return
+  scrollFrame = requestAnimationFrame(() => { scrollFrame = 0; updateActiveHeading() })
+}
+onMounted(() => window.addEventListener('scroll', onScroll, { passive: true }))
+onBeforeUnmount(() => { window.removeEventListener('scroll', onScroll); cancelAnimationFrame(scrollFrame) })
+watch([document, readingMode], async () => { await nextTick(); updateActiveHeading() })
 
 function changeDocumentLocale(event: Event) {
   const value = (event.target as HTMLSelectElement).value
@@ -150,68 +179,71 @@ watchEffect(() => {
 </script>
 
 <template>
-  <main class="docs-service">
+  <main class="docs-service" :class="{ 'docs-reading-mode': readingMode && document }">
     <header class="docs-service-header">
       <div class="docs-width docs-service-header-inner">
-        <div><RouterLink class="docs-service-title" :to="catalogBase">{{ t('docs.title') }}</RouterLink></div>
+        <RouterLink class="docs-service-title" :to="catalogBase"><BookOpen :size="19" aria-hidden="true" />{{ t('docs.title') }}</RouterLink>
+        <nav class="docs-project-tabs" :aria-label="t('docs.projectSelector')">
+          <RouterLink v-for="item in (['wave', 'stdlib', 'whale'] as const)" :key="item" :to="documentationCatalog(docLocale, item)" :class="{ active: project === item }" :aria-current="project === item ? 'page' : undefined">{{ projectLabel(item) }}</RouterLink>
+        </nav>
         <label class="docs-locale-select">
           <span>{{ t('docs.languageSelector') }}</span>
           <select :value="docLocale" @change="changeDocumentLocale">
             <option v-for="option in documentLocales" :key="option.id" :value="option.id">{{ option.label }}</option>
           </select>
         </label>
-        <label class="docs-search"><Search :size="16" aria-hidden="true" /><input v-model="query" :aria-label="t('docs.search')" :placeholder="t('docs.search')" /></label>
       </div>
-      <nav class="docs-width docs-project-tabs" :aria-label="t('docs.projectSelector')">
-        <RouterLink v-for="item in (['wave', 'stdlib', 'whale'] as const)" :key="item" :to="documentationCatalog(docLocale, item)" :class="{ active: project === item }" :aria-current="project === item ? 'page' : undefined">{{ projectLabel(item) }}</RouterLink>
-      </nav>
     </header>
 
     <div v-if="loading" class="docs-width docs-loading"><UiSkeletonRows :rows="8" /></div>
     <div v-else-if="failed" class="docs-width docs-loading"><UiInlineState :message="t('common.loadError')" :action="t('common.retry')" @action="load" /></div>
 
-    <div v-else-if="document" class="docs-width docs-reader-layout">
-      <aside class="docs-tree docs-tree-desktop" :aria-label="t('docs.navigation')">
-        <section v-for="group in groups" :key="group.id">
-          <strong>{{ group.title }}</strong>
-          <RouterLink v-for="item in group.items" :key="item.path" :to="`${docBase}/${item.path}`" :class="{ active: item.path === document.path }">{{ item.title }}</RouterLink>
-        </section>
+    <div v-else class="docs-width docs-reader-layout" :class="{ 'docs-catalog-layout': !document }">
+      <aside class="docs-tree docs-tree-desktop">
+        <DocumentationTree v-model="query" :groups="groups" :base="docBase" :catalog="catalogBase" :project-name="projectName" :current-path="currentPath" :active-group="document?.group" />
       </aside>
-
-      <details class="docs-tree-mobile">
-        <summary>{{ t('docs.navigation') }}</summary>
-        <div>
-          <section v-for="group in groups" :key="group.id">
-            <strong>{{ group.title }}</strong>
-            <RouterLink v-for="item in group.items" :key="item.path" :to="`${docBase}/${item.path}`" :class="{ active: item.path === document.path }">{{ item.title }}</RouterLink>
-          </section>
-        </div>
+      <details ref="mobileNavigation" class="docs-tree-mobile">
+        <summary><List :size="18" aria-hidden="true" />{{ t('docs.navigation') }}<ChevronRight :size="16" aria-hidden="true" /></summary>
+        <div><DocumentationTree v-model="query" :groups="groups" :base="docBase" :catalog="catalogBase" :project-name="projectName" :current-path="currentPath" :active-group="document?.group" /></div>
       </details>
 
-      <article class="document-page">
-        <nav class="document-breadcrumb"><RouterLink :to="catalogBase">{{ projectName }} {{ t('docs.title') }}</RouterLink><span>/</span><span>{{ groupName(document.group) }}</span></nav>
+      <article v-if="document" ref="article" class="document-page">
+        <div class="document-toolbar">
+          <nav class="document-breadcrumb" :aria-label="t('docs.breadcrumb')">
+            <RouterLink :to="catalogBase">{{ projectName }}</RouterLink><ChevronRight :size="12" aria-hidden="true" /><span>{{ groupName(document.group) }}</span>
+          </nav>
+          <button class="document-focus" type="button" :aria-pressed="readingMode" @click="readingMode = !readingMode">
+            <Minimize2 v-if="readingMode" :size="15" aria-hidden="true" /><Maximize2 v-else :size="15" aria-hidden="true" />{{ t(readingMode ? 'docs.exitFocus' : 'docs.focus') }}
+          </button>
+        </div>
         <p v-if="showingEnglishFallback" class="docs-translation-notice" role="status">{{ t('docs.englishFallback') }}</p>
-        <header><h1>{{ document.title }}</h1><p>{{ document.summary }}</p></header>
+        <header class="document-heading"><p class="document-eyebrow">{{ t('docs.article') }}</p><h1>{{ document.title }}</h1><p>{{ document.summary }}</p></header>
+        <details v-if="headings.length" class="docs-toc-inline">
+          <summary>{{ t('docs.contents') }}<ChevronRight :size="14" aria-hidden="true" /></summary>
+          <nav :aria-label="t('docs.contents')"><a v-for="heading in headings" :key="heading.anchor" :href="`#${heading.anchor}`" :class="`level-${heading.level}`">{{ heading.text }}</a></nav>
+        </details>
         <div class="document-content"><MarkdownContent :source="document.markdown" runnable /></div>
-        <nav class="document-pagination">
-          <RouterLink v-if="previous" :to="`${docBase}/${previous.path}`"><small>{{ t('docs.previous') }}</small><span>← {{ previous.title }}</span></RouterLink><span v-else />
-          <RouterLink v-if="next" :to="`${docBase}/${next.path}`"><small>{{ t('docs.next') }}</small><span>{{ next.title }} →</span></RouterLink>
+        <nav class="document-pagination" :aria-label="t('docs.navigation')">
+          <RouterLink v-if="previous" :to="`${docBase}/${previous.path}`"><small><ArrowLeft :size="14" aria-hidden="true" />{{ t('docs.previous') }}</small><span>{{ previous.title }}</span></RouterLink><span v-else />
+          <RouterLink v-if="next" :to="`${docBase}/${next.path}`"><small>{{ t('docs.next') }}<ArrowRight :size="14" aria-hidden="true" /></small><span>{{ next.title }}</span></RouterLink>
         </nav>
       </article>
 
-      <aside class="docs-toc" :aria-label="t('docs.contents')"><strong>{{ t('docs.contents') }}</strong><a v-for="heading in headings" :key="heading.anchor" :href="`#${heading.anchor}`" :class="`level-${heading.level}`">{{ heading.text }}</a></aside>
-    </div>
+      <aside v-if="document && headings.length" class="docs-toc">
+        <nav :aria-label="t('docs.contents')"><strong>{{ t('docs.contents') }}</strong><a v-for="heading in headings" :key="heading.anchor" :href="`#${heading.anchor}`" :class="[`level-${heading.level}`, { active: activeHeading === heading.anchor }]" :aria-current="activeHeading === heading.anchor ? 'location' : undefined">{{ heading.text }}</a></nav>
+      </aside>
 
-    <div v-else class="docs-width docs-catalog-page">
-      <header class="docs-titlebar"><h1>{{ projectName }} {{ t('docs.title') }}</h1><p>{{ project === 'stdlib' ? t('docs.stdlibLead') : project === 'whale' ? t('docs.whaleLead') : t('docs.lead') }}</p></header>
-      <p v-if="hasEnglishFallbackItems" class="docs-translation-notice" role="status">{{ t('docs.englishFallbackCatalog') }}</p>
-      <div class="docs-catalog">
-        <section v-for="group in groups" :key="group.id" class="docs-catalog-group">
-          <h2>{{ group.title }}</h2>
-          <ul><li v-for="item in group.items" :key="item.path"><RouterLink :to="`${docBase}/${item.path}`"><strong>{{ item.title }}</strong><span>{{ item.summary }}</span></RouterLink></li></ul>
-        </section>
-      </div>
-      <p v-if="groups.length === 0" class="docs-empty" role="status">{{ t(documents.length === 0 ? 'docs.emptyProject' : 'docs.noResults') }}</p>
+      <article v-if="!document" class="docs-catalog-page">
+        <header class="docs-titlebar"><p class="document-eyebrow">{{ t('docs.title') }}</p><h1>{{ projectName }} {{ t('docs.title') }}</h1><p>{{ project === 'stdlib' ? t('docs.stdlibLead') : project === 'whale' ? t('docs.whaleLead') : t('docs.lead') }}</p></header>
+        <p v-if="hasEnglishFallbackItems" class="docs-translation-notice" role="status">{{ t('docs.englishFallbackCatalog') }}</p>
+        <div class="docs-catalog">
+          <section v-for="group in groups" :key="group.id" class="docs-catalog-group">
+            <h2>{{ group.title }}</h2>
+            <ul><li v-for="item in group.items" :key="item.path"><RouterLink :to="`${docBase}/${item.path}`"><strong>{{ item.title }}</strong><span>{{ item.summary }}</span></RouterLink></li></ul>
+          </section>
+        </div>
+        <p v-if="groups.length === 0" class="docs-empty" role="status">{{ t(documents.length === 0 ? 'docs.emptyProject' : 'docs.noResults') }}</p>
+      </article>
     </div>
   </main>
 </template>
