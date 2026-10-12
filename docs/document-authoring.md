@@ -191,3 +191,25 @@ The live test uses the running local service at `http://localhost:8080` unless
 `PLAYGROUND_URL` selects another instance. The document checker also rejects
 unregistered playground fences and cases that require file fixtures or have
 `check`/`reject` modes. Add new examples only after the live test passes.
+
+
+## Documentation links and heading IDs
+
+Use `/docs/{locale}/{path}` for documentation links. Heading fragments follow the
+rendered GitHub-style Markdown IDs, including Unicode titles, inline formatting,
+and duplicate-heading suffixes. A link to an untranslated page resolves to the
+English page, so its fragment must exist in that English page. Retired paths are
+resolved through `wavedoc/redirects.json`.
+
+Before committing link or heading changes, run:
+
+```shell
+cd frontend
+npm run check:doc-links
+npm run test:docs
+```
+
+CI checks every official document without fetching external URLs. The checker
+validates document paths, reference links, heading fragments, locale support,
+redirects, and English fallback. Links to `.md` files are rejected because the
+platform serves documentation URLs rather than Markdown source-file URLs.

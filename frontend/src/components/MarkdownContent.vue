@@ -4,11 +4,12 @@ import { computed, nextTick, onMounted, ref, shallowRef, useId, watch } from 'vu
 
 import { grammarForLanguage, normalizeFenceLanguage, Prism } from './source/syntax'
 import { highlightWave } from '../services/waveSyntax'
-import { renderDocumentMarkdown, type DocumentExample } from '../services/documentMarkdown'
+import { renderDocumentMarkdown, type DocumentExample, type DocumentHeading } from '../services/documentMarkdown'
 import WavePlayground from './WavePlayground.vue'
 
 defineOptions({ inheritAttrs: false })
 const props = defineProps<{ source: string; repository?: string; path?: string; reference?: string; runnable?: boolean }>()
+const emit = defineEmits<{ headings: [items: DocumentHeading[]] }>()
 const article = ref<HTMLElement | null>(null)
 const slotPrefix = `wave-example-${useId()}`
 const targets = shallowRef<Array<{ element: HTMLElement; example: DocumentExample }>>([])
@@ -72,6 +73,9 @@ async function mountExamples() {
   targets.value = []
   await nextTick()
   if (current !== generation || !article.value) return
+  emit('headings', Array.from(article.value.querySelectorAll<HTMLElement>('h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]')).map(element => ({
+    anchor: element.id, level: Number(element.tagName.slice(1)), text: element.textContent ?? '',
+  })))
   const placeholders = Array.from(article.value.querySelectorAll<HTMLElement>('[data-wave-playground]'))
   targets.value = result.slots.flatMap((example, index) => {
     const element = placeholders.find(item => item.dataset.wavePlayground === `${slotPrefix}-${index}`)

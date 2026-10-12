@@ -100,7 +100,9 @@ jobs:
 
       - name: Run frontend documentation tests
         working-directory: frontend
-        run: npm run test:docs
+        run: |
+          npm run test:docs
+          npm run check:doc-links
 
       - name: Run frontend toolchain tests
         working-directory: frontend

@@ -634,6 +634,10 @@
 .docs-search input { min-width: 0; width: 100%; padding: 6px 0; border: 0; outline: 0; background: transparent; color: var(--wave-text); font-size: 13px; }
 .docs-search input::placeholder { color: var(--wave-text-muted); }
 .docs-loading { padding: 32px 0; }
+.docs-error-page { padding: 48px 0 72px; }
+.docs-error-page h1 { font-size: 28px; }
+.docs-error-page p { color: var(--wave-text-secondary); }
+.docs-error-page a { color: var(--wave-accent); }
 .docs-reader-layout { display: grid; grid-template-columns: 258px minmax(0, 1fr) 216px; align-items: start; column-gap: 36px; }
 .docs-catalog-layout { grid-template-columns: 258px minmax(0, 1fr); }
 .docs-tree, .docs-toc { position: sticky; top: 24px; max-height: calc(100dvh - 48px); overflow-y: auto; scrollbar-width: thin; }

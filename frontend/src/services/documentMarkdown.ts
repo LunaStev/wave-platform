@@ -1,7 +1,8 @@
 import { Marked, Renderer, type Token, type Tokens } from 'marked'
-import { gfmHeadingId } from 'marked-gfm-heading-id'
+import { getHeadingList, gfmHeadingId } from 'marked-gfm-heading-id'
 import manifest from '../../../wavedoc/examples.json' with { type: 'json' }
 
+export type DocumentHeading = { anchor: string; level: number; text: string }
 export type DocumentExample = { source: string; stdin?: string }
 type ExampleMetadata = { id: string; stdin?: string }
 const examples = new Map<string, ExampleMetadata>(manifest.map(item => [item.id, item]))
@@ -13,6 +14,7 @@ export function renderDocumentMarkdown(source: string, options: {
   renderCode: (text: string, language?: string) => string
 }) {
   const slots: DocumentExample[] = []
+  const links: string[] = []
   const ids = new WeakMap<Tokens.Code, string>()
   // Only an immediately preceding marker supplies metadata. Visit nested lists
   // and quotes as well, while keeping the full document in a single parse so
@@ -44,7 +46,10 @@ export function renderDocumentMarkdown(source: string, options: {
   }
   const parser = new Marked(gfmHeadingId(), {
     async: false, gfm: true, breaks: false, renderer,
+    walkTokens(token) { if (token.type === 'link') links.push(token.href) },
     hooks: { processAllTokens(tokens) { annotate(tokens); return tokens } },
   })
-  return { html: parser.parse(source) as string, slots }
+  const html = parser.parse(source) as string
+  const headings: DocumentHeading[] = getHeadingList().map(({ id, level, raw }) => ({ anchor: id, level, text: raw }))
+  return { html, slots, headings, links }
 }

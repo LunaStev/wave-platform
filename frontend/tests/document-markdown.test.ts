@@ -49,3 +49,11 @@ test('example text stays data, including HTML and closing-tag strings', () => {
   assert.ok(!result.html.includes('<img'))
   assert.equal(result.slots.length, 1)
 })
+
+
+test('heading metadata comes from the renderer, including punctuation, inline code, nested and duplicate headings', () => {
+  const result = renderDocumentMarkdown('## ¿When `var`?\n\n> ### 한글 제목\n\n## Same\n\n## Same', options)
+  assert.deepEqual(result.headings.map(({ anchor, level }) => [anchor, level]), [['when-var', 2], ['한글-제목', 3], ['same', 2], ['same-1', 2]])
+  renderDocumentMarkdown('## Another document', options)
+  assert.equal(result.headings[3].anchor, 'same-1')
+})
