@@ -8,6 +8,8 @@ import DocumentationTree from '../components/docs/DocumentationTree.vue'
 import { useI18n } from '../i18n'
 import { documentLocales, isDocumentLocale, saveDocumentLocale } from '../services/documentLocale'
 import { documentationCatalog, documentationPath, documentationProject, projectDocuments } from '../services/documentNavigation'
+import { createDocumentLoader } from '../services/documentLoader'
+import type { DocumentHeading } from '../services/documentMarkdown'
 import { HTTPError, getDocument, getDocuments, type DocumentLocale, type DocumentSummary, type DocumentView } from '../services/http'
 import { applyPageSEO } from '../services/seo'
 import UiInlineState from '../ui/UiInlineState.vue'
@@ -24,7 +26,12 @@ const article = ref<HTMLElement | null>(null)
 const mobileNavigation = ref<HTMLDetailsElement | null>(null)
 const activeHeading = ref('')
 const loading = ref(true)
-const failed = ref(false)
+const failure = ref<'not-found' | 'unavailable' | null>(null)
+const failed = computed(() => failure.value !== null)
+const headings = ref<DocumentHeading[]>([])
+const isNotFound = (error: unknown) => error instanceof HTTPError && error.status === 404
+const documentLoader = createDocumentLoader({ list: getDocuments, get: getDocument, isNotFound })
+let restoreAnchor = false
 const showingEnglishFallback = ref(false)
 const hasEnglishFallbackItems = computed(() => docLocale.value !== 'en' && documents.value.some(item => item.locale === 'en'))
 
@@ -53,7 +60,6 @@ const groups = computed(() => {
   for (const item of filtered.value) result.set(item.group, [...(result.get(item.group) ?? []), item])
   return Array.from(result, ([id, items]) => ({ id, title: groupName(id), items }))
 })
-const headings = computed(() => document.value?.blocks.filter((block) => block.kind === 'heading' && block.anchor) ?? [])
 const currentIndex = computed(() => documents.value.findIndex((item) => item.path === currentPath.value))
 const previous = computed(() => currentIndex.value > 0 ? documents.value[currentIndex.value - 1] : null)
 const next = computed(() => currentIndex.value >= 0 && currentIndex.value < documents.value.length - 1 ? documents.value[currentIndex.value + 1] : null)
@@ -68,38 +74,27 @@ function groupName(group: string) {
 }
 
 let loadGeneration = 0
-async function load() {
+async function load(fresh = false) {
   const generation = ++loadGeneration
   const requestedLocale = docLocale.value
   const path = currentPath.value
   const selectedProject = project.value
   loading.value = true
   document.value = null
-  failed.value = false
+  failure.value = null
+  headings.value = []
+  restoreAnchor = true
   showingEnglishFallback.value = false
   try {
     saveDocumentLocale(requestedLocale)
-    const [translated, english] = await Promise.all([
-      getDocuments(requestedLocale), requestedLocale === 'en' ? Promise.resolve([]) : getDocuments('en'),
-    ])
-    let loadedDocument: DocumentView | null = null
-    let fallback = false
-    if (path) {
-      try {
-        loadedDocument = await getDocument(path, requestedLocale)
-      } catch (error) {
-        if (requestedLocale === 'en' || !(error instanceof HTTPError) || error.status !== 404) throw error
-        loadedDocument = await getDocument(path, 'en')
-        fallback = true
-      }
-    }
+    const result = await documentLoader.load(path, requestedLocale, fresh)
     if (generation !== loadGeneration) return
-    documents.value = projectDocuments(translated, english, selectedProject)
-    document.value = loadedDocument
-    showingEnglishFallback.value = fallback
-  } catch {
+    documents.value = projectDocuments(result.translated, result.english, selectedProject)
+    document.value = result.document
+    showingEnglishFallback.value = result.englishFallback
+  } catch (error) {
     if (generation !== loadGeneration) return
-    failed.value = true
+    failure.value = isNotFound(error) ? 'not-found' : 'unavailable'
     document.value = null
   } finally {
     if (generation === loadGeneration) loading.value = false
@@ -131,6 +126,19 @@ function onScroll() {
 onMounted(() => window.addEventListener('scroll', onScroll, { passive: true }))
 onBeforeUnmount(() => { window.removeEventListener('scroll', onScroll); cancelAnimationFrame(scrollFrame) })
 watch([document, readingMode], async () => { await nextTick(); updateActiveHeading() })
+async function onHeadings(items: DocumentHeading[]) {
+  const loaded = document.value
+  headings.value = items.filter(item => item.level >= 2 && item.level <= 4)
+  await nextTick()
+  if (loaded !== document.value) return
+  if (restoreAnchor) {
+    restoreAnchor = false
+    let anchor = ''
+    try { anchor = decodeURIComponent(route.hash.slice(1)) } catch { /* Ignore malformed fragments. */ }
+    if (anchor) Array.from(article.value?.querySelectorAll<HTMLElement>('[id]') ?? []).find(element => element.id === anchor)?.scrollIntoView({ block: 'start' })
+  }
+  updateActiveHeading()
+}
 
 function changeDocumentLocale(event: Event) {
   const value = (event.target as HTMLSelectElement).value
@@ -143,8 +151,8 @@ function changeDocumentLocale(event: Event) {
 watchEffect(() => {
   if (!document.value) {
     applyPageSEO({
-      title: failed.value ? 'Page not found · Wave' : `${projectName.value} Documentation · Wave`,
-      description: failed.value ? 'The requested document could not be loaded.' : project.value === 'stdlib' ? t('docs.stdlibLead') : project.value === 'whale' ? t('docs.whaleLead') : t('docs.lead'),
+      title: failed.value ? `${t(failure.value === 'not-found' ? 'docs.notFound' : 'docs.unavailable')} · Wave` : `${projectName.value} Documentation · Wave`,
+      description: failed.value ? t(failure.value === 'not-found' ? 'docs.notFoundHelp' : 'docs.unavailable') : project.value === 'stdlib' ? t('docs.stdlibLead') : project.value === 'whale' ? t('docs.whaleLead') : t('docs.lead'),
       locale: docLocale.value, path: route.path, noIndex: failed.value,
       schema: { '@type': 'CollectionPage' },
       alternates: !currentPath.value ? [...documentLocales.map((item) => ({ locale: item.id, path: documentationCatalog(item.id, project.value) })), { locale: 'x-default', path: documentationCatalog('en', project.value) }] : [],
@@ -196,7 +204,10 @@ watchEffect(() => {
     </header>
 
     <div v-if="loading" class="docs-width docs-loading"><UiSkeletonRows :rows="8" /></div>
-    <div v-else-if="failed" class="docs-width docs-loading"><UiInlineState :message="t('common.loadError')" :action="t('common.retry')" @action="load" /></div>
+    <div v-else-if="failure === 'not-found'" class="docs-width docs-error-page">
+      <h1>{{ t('docs.notFound') }}</h1><p>{{ t('docs.notFoundHelp') }}</p><RouterLink :to="catalogBase">{{ t('docs.browse') }}</RouterLink>
+    </div>
+    <div v-else-if="failed" class="docs-width docs-loading"><UiInlineState :message="t('docs.unavailable')" :action="t('common.retry')" @action="load(true)" /></div>
 
     <div v-else class="docs-width docs-reader-layout" :class="{ 'docs-catalog-layout': !document }">
       <aside class="docs-tree docs-tree-desktop">
@@ -222,7 +233,7 @@ watchEffect(() => {
           <summary>{{ t('docs.contents') }}<ChevronRight :size="14" aria-hidden="true" /></summary>
           <nav :aria-label="t('docs.contents')"><a v-for="heading in headings" :key="heading.anchor" :href="`#${heading.anchor}`" :class="`level-${heading.level}`">{{ heading.text }}</a></nav>
         </details>
-        <div class="document-content"><MarkdownContent :source="document.markdown" runnable /></div>
+        <div class="document-content"><MarkdownContent :source="document.markdown" runnable @headings="onHeadings" /></div>
         <nav class="document-pagination" :aria-label="t('docs.navigation')">
           <RouterLink v-if="previous" :to="`${docBase}/${previous.path}`"><small><ArrowLeft :size="14" aria-hidden="true" />{{ t('docs.previous') }}</small><span>{{ previous.title }}</span></RouterLink><span v-else />
           <RouterLink v-if="next" :to="`${docBase}/${next.path}`"><small>{{ t('docs.next') }}<ArrowRight :size="14" aria-hidden="true" /></small><span>{{ next.title }}</span></RouterLink>
